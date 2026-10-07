@@ -240,10 +240,13 @@ public final class Needs {
 
     /** How many golden carrots to make now: as the carrots beyond the seed ones and the gold (bag and chests) allow. */
     private static int goldenCarrotsToMake(BotPlayer bot) {
-        int nuggets = have(bot, Items.GOLD_NUGGET) + 9 * have(bot, Items.GOLD_INGOT) + 81 * have(bot, Items.GOLD_BLOCK);
+        // A batch from one kind of gold at a time (the planner doesn't mix loose nuggets with ingots broken up):
+        // as many as the loose nuggets make, or else one from an ingot
+        int nuggets = have(bot, Items.GOLD_NUGGET);
+        int fromGold = nuggets >= 8 ? nuggets / 8 : have(bot, Items.GOLD_INGOT) > 0 ? 1 : 0;
         int carrots = have(bot, Items.CARROT) - SEED_POTATOES; // (as many kept back for sowing as potatoes)
         int room = GOLDEN_CARROTS - have(bot, Items.GOLDEN_CARROT);
-        return Math.max(0, Math.min(GOLDEN_BATCH, Math.min(room, Math.min(carrots, nuggets / 8))));
+        return Math.max(0, Math.min(GOLDEN_BATCH, Math.min(room, Math.min(carrots, fromGold))));
     }
 
     private static int have(BotPlayer bot, net.minecraft.world.item.Item item) {
