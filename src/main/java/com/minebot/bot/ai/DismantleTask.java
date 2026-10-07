@@ -40,7 +40,8 @@ public class DismantleTask extends Task {
     }
 
     public static boolean wanted(BotPlayer bot) {
-        if (GreatBuildTask.isAway(bot) || !anyLeft(bot, bot.pillars())) { // (at the Great Build: no time for that)
+        // (at the Great Build, or time to set off for it: no time for that; it's done once back home)
+        if (GreatBuildTask.isAway(bot) || GreatBuildTask.sessionOn(bot) || !anyLeft(bot, bot.pillars())) {
             return false;
         }
         // Not while it's still using it: a minute after it went up, and once it has moved off it

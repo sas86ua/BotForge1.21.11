@@ -101,7 +101,23 @@ public final class BlockRules {
         return null;
     }
 
+    /**
+     * Answers by block state (the path search asks these for every block it looks at, a dozen bots
+     * at once: two dozen tag lookups each time made a good part of the server's lag).
+     */
+    private static final java.util.Map<BlockState, Boolean> BUILT = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<BlockState, Boolean> NATURAL = new java.util.concurrent.ConcurrentHashMap<>();
+
     public static boolean isBuilt(BlockState state) {
+        Boolean known = BUILT.get(state);
+        if (known == null) {
+            known = computeBuilt(state);
+            BUILT.put(state, known);
+        }
+        return known;
+    }
+
+    private static boolean computeBuilt(BlockState state) {
         return state.is(BlockTags.PLANKS) || state.is(BlockTags.STAIRS) || state.is(BlockTags.SLABS)
             || state.is(BlockTags.FENCES) || state.is(BlockTags.FENCE_GATES) || state.is(BlockTags.WALLS)
             || state.is(BlockTags.DOORS) || state.is(BlockTags.TRAPDOORS) || state.is(BlockTags.BEDS)
@@ -114,6 +130,15 @@ public final class BlockRules {
 
     /** Natural terrain a bot is allowed to dig through. */
     public static boolean isNaturalTerrain(BlockState state) {
+        Boolean known = NATURAL.get(state);
+        if (known == null) {
+            known = computeNatural(state);
+            NATURAL.put(state, known);
+        }
+        return known;
+    }
+
+    private static boolean computeNatural(BlockState state) {
         if (state.is(BlockTags.LEAVES)) {
             return !state.hasProperty(LeavesBlock.PERSISTENT) || !state.getValue(LeavesBlock.PERSISTENT);
         }

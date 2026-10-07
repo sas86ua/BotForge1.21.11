@@ -87,7 +87,8 @@ public final class GreatBuild extends SavedData {
         Codec.LONG.optionalFieldOf("placed", 0L).forGetter(b -> b.placed),
         Codec.LONG.optionalFieldOf("dug", 0L).forGetter(b -> b.dug),
         Codec.INT.listOf().optionalFieldOf("chunk_done", List.of()).forGetter(b -> b.chunkDone),
-        Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC.listOf()).optionalFieldOf("camp", Map.of()).forGetter(b -> b.camp)
+        Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC.listOf()).optionalFieldOf("camp", Map.of()).forGetter(b -> b.camp),
+        UUIDUtil.STRING_CODEC.listOf().optionalFieldOf("sent_early", List.of()).forGetter(b -> List.copyOf(b.sentEarly))
     ).apply(i, GreatBuild::new));
     private static final SavedDataType<GreatBuild> TYPE =
         new SavedDataType<>("minebot_great_build", GreatBuild::new, CODEC, null);
@@ -112,6 +113,8 @@ public final class GreatBuild extends SavedData {
     private final List<Integer> chunkDone;
     /** Each bot's camp by the site: its camp fire first, then its furnaces round it. */
     private final Map<UUID, List<BlockPos>> camp;
+    /** Bots sent off to the site ahead of time (an admin's "go"): they go now and wait there for the start. */
+    private final Set<UUID> sentEarly = new HashSet<>();
 
     // ---- not saved ------------------------------------------------------------------------------
     private @Nullable Schematic plan;
@@ -136,12 +139,12 @@ public final class GreatBuild extends SavedData {
     private final Map<Item, Integer> materialTotals = new LinkedHashMap<>();
 
     public GreatBuild() {
-        this("", BlockPos.ZERO, -1, -1, 0, Map.of(), Map.of(), 0, 0, List.of(), Map.of());
+        this("", BlockPos.ZERO, -1, -1, 0, Map.of(), Map.of(), 0, 0, List.of(), Map.of(), List.of());
     }
 
     private GreatBuild(String file, BlockPos centre, long nextDay, long sessionEnd, int sessions,
                        Map<UUID, Map<String, Integer>> orders, Map<String, Integer> failures, long placed, long dug,
-                       List<Integer> chunkDone, Map<UUID, List<BlockPos>> camp) {
+                       List<Integer> chunkDone, Map<UUID, List<BlockPos>> camp, List<UUID> sentEarly) {
         this.file = file;
         this.centre = centre;
         this.nextDay = nextDay;
@@ -155,6 +158,7 @@ public final class GreatBuild extends SavedData {
         this.chunkDone = new ArrayList<>(chunkDone);
         this.camp = new HashMap<>();
         camp.forEach((uuid, list) -> this.camp.put(uuid, new ArrayList<>(list)));
+        this.sentEarly.addAll(sentEarly);
     }
 
     public static GreatBuild get(MinecraftServer server) {
@@ -339,8 +343,6 @@ public final class GreatBuild extends SavedData {
         return sentEarly.contains(bot.getUUID()) || now >= departure(bot) && now < nextDay * DAY + DAY;
     }
 
-    /** Bots sent off to the site ahead of time (an admin's "go"): they go now and wait there for the start. */
-    private final Set<UUID> sentEarly = new HashSet<>();
 
     /** Sends these bots to the site now, ahead of the next session; how many were sent. */
     public int sendEarly(java.util.Collection<BotPlayer> bots) {
@@ -349,6 +351,9 @@ public final class GreatBuild extends SavedData {
             if (bot.memory().autonomous() && sentEarly.add(bot.getUUID())) {
                 sent++;
             }
+        }
+        if (sent > 0) {
+            setDirty(); // (kept over a restart: they'd all go home otherwise)
         }
         return sent;
     }

@@ -29,6 +29,12 @@ import java.util.List;
 public class Navigator {
     private static final int NODES_PER_TICK = 1500;
     private static final int MAX_NODES = 30_000;
+    /** All bots' searches together, per tick (server thread only). */
+    private static final int NODES_ALL_BOTS = 5000;
+    private static final int MIN_NODES_PER_TICK = 300;
+    private static int budgetTick = -1;
+    private static int searchersThisTick;
+    private static int searchersLastTick = 1;
     private static final int STEP_TIMEOUT = 80;
     private static final int MAX_FAILED_REPLANS = 6;
     private static final int MAX_STALLED_PARTIALS = 3;
@@ -235,7 +241,7 @@ public class Navigator {
         }
         if (search != null) {
             bot.controller().releaseInputs();
-            search.step(NODES_PER_TICK);
+            search.step(nodesThisTick());
             if (!search.isFinished()) {
                 return status;
             }
@@ -262,6 +268,21 @@ public class Navigator {
         }
         follow();
         return status;
+    }
+
+    /**
+     * This search's share of the nodes for this tick: all the bots' searches together get about
+     * {@link #NODES_ALL_BOTS} (a dozen bots searching at once made the server lag), each the same.
+     */
+    private int nodesThisTick() {
+        int tick = bot.level().getServer().getTickCount();
+        if (tick != budgetTick) {
+            searchersLastTick = Math.max(1, searchersThisTick);
+            searchersThisTick = 0;
+            budgetTick = tick;
+        }
+        searchersThisTick++;
+        return Math.max(MIN_NODES_PER_TICK, Math.min(NODES_PER_TICK, NODES_ALL_BOTS / searchersLastTick));
     }
 
     private void startSearch() {

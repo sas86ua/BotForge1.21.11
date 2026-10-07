@@ -49,6 +49,11 @@ public class GreatBuildTask extends Task {
     private static final Map<UUID, Long> ANNOUNCED = new ConcurrentHashMap<>();
     /** Ticks one job may take before it's left for later. */
     private static final int JOB_TICKS = 20 * 30;
+    /**
+     * A way to a job: jobs are near (the nearest first), so a small search; one it can't get to
+     * (a tree top, a ledge) is left for later at once, not combed for over 30 000 blocks, again and again.
+     */
+    private static final int JOB_NODES = 6000;
     private static final int GO_TRIES = 8;
     /** Bag slots left free when packing materials (for what it digs and picks up there). */
     private static final int PACK_FREE_SLOTS = 5;
@@ -504,7 +509,7 @@ public class GreatBuildTask extends Task {
         if (!bot.isWithinBlockInteractionRange(pos, 0.5) || !dig && inside) {
             Navigator navigator = bot.navigator();
             if (!navigator.isActive() || jobTicks == 1) {
-                navigator.navigate(Goal.reach(pos));
+                navigator.navigate(Goal.reach(pos), JOB_NODES);
             }
             if (navigator.tick() == Navigator.Status.FAILED) {
                 giveUp(build);
