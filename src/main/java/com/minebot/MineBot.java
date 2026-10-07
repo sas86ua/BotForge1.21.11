@@ -18,6 +18,8 @@ public final class MineBot {
     public MineBot() {
         RegisterCommandsEvent.BUS.addListener(event -> BotCommand.register(event.getDispatcher(), event.getBuildContext()));
         ServerStartedEvent.BUS.addListener(event -> {
+            // The Great Build's site first: part of every bot's zone (else a bot there when it logs in heads home)
+            com.minebot.bot.build.GreatBuild.get(event.getServer()).plan(event.getServer());
             BotManager.onServerStarted(event.getServer());
             com.minebot.stats.ServerStats.onServerStarted();
         });

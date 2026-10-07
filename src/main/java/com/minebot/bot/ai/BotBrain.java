@@ -124,6 +124,11 @@ public class BotBrain {
         if (ticks % 2400 == 0) {
             DumpTask.scan(bot);
         }
+        if (current != null && ticks % REEVALUATE_TICKS == 0 && currentNeed != null && currentNeed.id().equals("back to zone")
+            && !currentNeed.wanted().test(bot)) {
+            bot.debug("back in my zone"); // (or the zone took it in: the Great Build's site)
+            stopCurrent();
+        }
         if (current != null && ticks % REEVALUATE_TICKS == 0) {
             Needs.Need urgent = nextNeed();
             if (urgent != null && urgent != currentNeed && isMoreImportant(urgent, currentNeed)) {
