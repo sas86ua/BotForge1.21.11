@@ -143,7 +143,9 @@ public class SmeltTask extends Task {
             }
         }
         if (burnNeeded > 0 && (entity.getItem(SLOT_FUEL).isEmpty() || unfuelled > 0) && Fuel.ticks(bot, keep) < Math.min(burnNeeded, 1600)) {
-            child = new ObtainTask(bot, new Target("fuel", Fuel.GATHERABLE.and(keep.negate()), 8), 1);
+            // (8 more than it has: with a few saplings already in the bag, "8 fuel" would be done at once, again and again)
+            java.util.function.Predicate<ItemStack> fuel = Fuel.GATHERABLE.and(keep.negate());
+            child = new ObtainTask(bot, new Target("fuel", fuel, Inv.count(bot, fuel) + 8), 1);
             return Status.RUNNING;
         }
 

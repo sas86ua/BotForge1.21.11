@@ -117,6 +117,7 @@ public class BotPlayer extends ServerPlayer {
     /** Where the bot was at the last status line, to notice when it stands still for long. */
     private @Nullable Vec3 lastStatusPos;
     private int stillStatuses;
+    private int furnaceStatuses;
     private boolean debug;
     /** Server tick of death, or -1 while alive. */
     private int deathTick = -1;
@@ -628,6 +629,15 @@ public class BotPlayer extends ServerPlayer {
         boolean resting = isSleeping() || task.contains("idling") || task.startsWith("idle")
             || task.startsWith("keeping ") && !task.contains("(")
             || task.contains("smelting ") || task.contains("cooking "); // (waiting by a furnace or camp fire takes minutes)
+        boolean still = lastStatusPos != null && lastStatusPos.distanceTo(position()) < 2.0;
+        // ...but not for ever: a quarter of an hour by a furnace without stirring is something gone wrong
+        boolean byFurnace = task.contains("smelting ") || task.contains("cooking ");
+        furnaceStatuses = still && byFurnace ? furnaceStatuses + 1 : 0;
+        if (furnaceStatuses >= 30) {
+            debug("STUCK? by a furnace for {} s while: {}", furnaceStatuses * STATUS_INTERVAL / 20, task);
+            brain.abandon("stuck by a furnace for " + furnaceStatuses * STATUS_INTERVAL / 20 + " s");
+            furnaceStatuses = 0;
+        }
         if (lastStatusPos != null && lastStatusPos.distanceTo(position()) < 2.0 && !resting) {
             if (++stillStatuses >= 3) {
                 debug("STUCK? hasn't moved for {} s while: {} (nav goal {}, nav status {})",

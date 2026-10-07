@@ -35,6 +35,13 @@ public class IdleTask extends Task {
             }
             return Status.RUNNING;
         }
+        BlockPos home = center();
+        if (!walking && home != null && bot.blockPosition().distSqr(home) > 64 * 64 && ticks % 100 == 1) {
+            // Far from home with nothing to do (its home's ground isn't even loaded to potter about on): home first
+            bot.navigator().navigate(Goal.column(home.getX(), home.getZ(), 8.0));
+            walking = true;
+            return Status.RUNNING;
+        }
         bot.controller().releaseInputs();
         if (bot.getRandom().nextInt(60) == 0) {
             bot.controller().glance(); // (looks about now and then, head up)
