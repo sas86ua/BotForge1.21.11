@@ -126,6 +126,8 @@ public class GreatBuildTask extends Task {
     /** What a digger puts in the camp chest: what digging gives. */
     private static final Predicate<ItemStack> DUG = stack -> Stash.isBulk(stack) || stack.is(Items.GRAVEL) || stack.is(Items.SAND)
         || stack.is(Items.FLINT) || stack.is(Items.CLAY_BALL);
+    /** Taken to the camp chest only by the load: at least this much of what it dug (2 stacks). */
+    private static final int DUMP_MIN = 128;
     /** A chest errand (putting in, taking out, putting one down) at most this often: one that failed isn't tried every tick. */
     private static final int CHEST_RETRY_TICKS = 20 * 30;
     private long nextChestAt;
@@ -484,9 +486,9 @@ public class GreatBuildTask extends Task {
         }
         if (job == null) {
             boolean digger = isDigger(bot);
-            if (digger && Inv.freeSlots(bot) < 3) {
-                // Bag full of what it dug: into the camp chest, to dig on (else it fills and builds with it;
-                // it isn't thrown away, as rubbish would be)
+            if (digger && Inv.freeSlots(bot) < 3 && !Stash.makeRoom(bot, 3, false) && Inv.count(bot, DUG) >= DUMP_MIN) {
+                // Bag full of what it dug (rubbish proper thrown out first): into the camp chest in one go, to dig
+                // on; not much of it, it fills and builds with it instead (it isn't thrown away, as rubbish would be)
                 Status dump = dumpDug(build);
                 if (dump != null) {
                     return dump;

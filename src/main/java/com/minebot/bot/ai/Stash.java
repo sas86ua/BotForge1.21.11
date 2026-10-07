@@ -129,14 +129,20 @@ public final class Stash {
      * @return whether there's that much room now
      */
     public static boolean makeRoom(BotPlayer bot, int wanted) {
+        return makeRoom(bot, wanted, true);
+    }
+
+    /** Like {@link #makeRoom(BotPlayer, int)}; without {@code bulk}, only rubbish proper goes (not dirt, cobblestone...). */
+    public static boolean makeRoom(BotPlayer bot, int wanted, boolean bulk) {
         if (Inv.freeSlots(bot) >= wanted) {
             return true;
         }
         Map<Integer, Integer> rubbish = disposable(bot);
-        for (boolean junkOnly : new boolean[] {true, false}) {
+        for (boolean junkOnly : bulk ? new boolean[] {true, false} : new boolean[] {true}) {
             for (Map.Entry<Integer, Integer> entry : rubbish.entrySet()) {
                 ItemStack stack = bot.getInventory().getItem(entry.getKey());
-                if (stack.isEmpty() || junkOnly && !JUNK.test(stack) || entry.getValue() < stack.getCount()) {
+                if (stack.isEmpty() || junkOnly && !JUNK.test(stack) && !(Ranged.is(stack) && isTool(stack))
+                    || entry.getValue() < stack.getCount()) {
                     continue; // (only whole stacks free a slot)
                 }
                 var thrown = bot.drop(bot.getInventory().removeItemNoUpdate(entry.getKey()), false);
