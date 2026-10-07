@@ -560,9 +560,29 @@ public class GreatBuildTask extends Task {
      */
     private @Nullable BlockPos inSight(GreatBuild build, BlockPos pos) {
         ServerLevel level = bot.level();
-        BlockHitResult hit = level.clip(new ClipContext(bot.getEyePosition(), Vec3.atCenterOf(pos),
+        Vec3 eyes = bot.getEyePosition();
+        BlockHitResult hit = level.clip(new ClipContext(eyes, Vec3.atCenterOf(pos),
             ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, bot));
         if (hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(pos)) {
+            return pos;
+        }
+        // Like a player, it can aim at any open face (the top of a block in the floor, say), not just the middle
+        boolean open = false;
+        for (Direction face : Direction.values()) {
+            BlockPos side = pos.relative(face);
+            if (!level.getBlockState(side).getCollisionShape(level, side).isEmpty()) {
+                continue;
+            }
+            open = true;
+            Vec3 point = Vec3.atCenterOf(pos).add(face.getStepX() * 0.45, face.getStepY() * 0.45, face.getStepZ() * 0.45);
+            BlockHitResult faceHit = level.clip(new ClipContext(eyes, point, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, bot));
+            if (faceHit.getType() == HitResult.Type.MISS || faceHit.getBlockPos().equals(pos)) {
+                return pos;
+            }
+        }
+        if (!open) {
+            // Walled in on every side (a wrong block inside the foundation): no way to see it short of breaking
+            // finished blocks round it, so it's swapped where it is
             return pos;
         }
         BlockPos blocker = hit.getBlockPos();
