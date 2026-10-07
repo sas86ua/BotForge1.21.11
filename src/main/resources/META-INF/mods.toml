@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[61,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="minebot"
+version="0.1.0"
+displayName="MineBot"
+authors="sas"
+# Server-side only: clients don't need this mod to connect
+displayTest="IGNORE_SERVER_VERSION"
+
+description='''Server-side bot players that move, mine and build.'''
+
+[[dependencies.minebot]]
+    modId="forge"
+    mandatory=true
+    versionRange="[61,)"
+    ordering="NONE"
+    side="SERVER"
+
+[[dependencies.minebot]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.21.11,1.22)"
+    ordering="NONE"
+    side="SERVER"
