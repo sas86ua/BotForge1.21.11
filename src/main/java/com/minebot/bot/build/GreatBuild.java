@@ -570,7 +570,7 @@ public final class GreatBuild extends SavedData {
      * The next job for this bot near it (or anywhere on the site): placing what it carries,
      * lowest first; then filling in the ground; then digging out, highest first.
      */
-    public @Nullable Job nextJob(BotPlayer bot, boolean digging) {
+    public @Nullable Job nextJob(BotPlayer bot, boolean digging, boolean digFirst) {
         Schematic schematic = plan;
         if (schematic == null) {
             return null;
@@ -591,6 +591,13 @@ public final class GreatBuild extends SavedData {
         boolean fill = Inv.count(bot, FILL) > 0;
         boolean dirt = Inv.count(bot, stack -> stack.is(Items.DIRT)) > 0;
         for (int radius : new int[] {8, 20, 200}) { // (close by first: from where it stands, without walking)
+            if (digging && digFirst && Inv.freeSlots(bot) >= 3) {
+                // A digger: clearing the site first (with a full bag, it fills holes with what it dug, then builds)
+                Job job = scan(bot, radius, false, index -> schematic.at(index).kind() == LegacyBlocks.Kind.AIR ? JobType.DIG : null, time);
+                if (job != null) {
+                    return job;
+                }
+            }
             if (any) {
                 Job job = scan(bot, radius, true, index -> {
                     LegacyBlocks.Spec spec = schematic.at(index);

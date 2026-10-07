@@ -118,6 +118,23 @@ public class GreatBuildTask extends Task {
         return stage != null && stage != Stage.PACK;
     }
 
+    /** About this share of the bots at the site clear it first (digging out what the plan has empty), the rest build. */
+    private static final double DIGGERS = 0.1;
+
+    /** One of the site's diggers: the first tenth of the bots working there (by id, so the same ones; at least one). */
+    private static boolean isDigger(BotPlayer bot) {
+        List<UUID> working = new ArrayList<>();
+        AWAY.forEach((uuid, stage) -> {
+            if (stage == Stage.WORK) {
+                working.add(uuid);
+            }
+        });
+        working.sort(null);
+        int count = Math.max(1, (int) Math.round(working.size() * DIGGERS));
+        int rank = working.indexOf(bot.getUUID());
+        return rank >= 0 && rank < count;
+    }
+
     public static boolean sessionOn(BotPlayer bot) {
         GreatBuild build = build(bot);
         return build != null && (build.inSession(bot.level().getServer()) || build.departureDue(bot));
@@ -336,9 +353,10 @@ public class GreatBuildTask extends Task {
         }
         if (job == null) {
             Stash.makeRoom(bot, 3);
-            job = build.nextJob(bot, true);
+            boolean digger = isDigger(bot);
+            job = build.nextJob(bot, true, digger);
             boolean carries = carriesMaterial(build);
-            if ((job == null || job.type() != GreatBuild.JobType.PLACE) && !carries && restock(build)) {
+            if ((job == null || job.type() != GreatBuild.JobType.PLACE) && !carries && !(digger && job != null) && restock(build)) {
                 dropJob(build);
                 return Status.RUNNING;
             }
