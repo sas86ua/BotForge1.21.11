@@ -61,6 +61,8 @@ public class GreatBuildTask extends Task {
      * (a tree top, a ledge) is left for later at once, not combed for over 30 000 blocks, again and again.
      */
     private static final int JOB_NODES = 6000;
+    /** This job's block: walked to where it can be seen already (or there's nowhere): no second walk for that. */
+    private boolean sightWalked;
     private static final int GO_TRIES = 8;
     /** Bag slots left free when packing materials (for what it digs and picks up there). */
     private static final int PACK_FREE_SLOTS = 5;
@@ -187,6 +189,17 @@ public class GreatBuildTask extends Task {
             bot.debug("great build: a chest at my camp, {}", spot.toShortString());
         }
         return Status.RUNNING;
+    }
+
+    /** Air (or anything without a body) on some side of it: a face there to see and aim at. */
+    private static boolean openFace(ServerLevel level, BlockPos pos) {
+        for (Direction face : Direction.values()) {
+            BlockPos side = pos.relative(face);
+            if (level.getBlockState(side).getCollisionShape(level, side).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean hasRoom(ChestBlockEntity chest) {
@@ -679,13 +692,34 @@ public class GreatBuildTask extends Task {
         }
         // Close enough, and (to put a block there) not standing in it
         boolean inside = bot.getBoundingBox().intersects(new AABB(pos));
-        if (!bot.isWithinBlockInteractionRange(pos, 0.5) || !dig && inside) {
+        boolean near = bot.isWithinBlockInteractionRange(pos, 0.5);
+        if (!dig && inside && near && !bot.blockPosition().equals(pos) && !bot.blockPosition().above().equals(pos)) {
+            // Only its body over the edge of the cell (it stands next to it): a step back into the middle of its
+            // own block (the way there is "reached" already: it stood there till the job timed out)
+            bot.navigator().stop();
+            bot.controller().moveTowards(Vec3.atBottomCenterOf(bot.blockPosition()), false, false);
+            return Status.RUNNING;
+        }
+        if (jobTicks == 1) {
+            sightWalked = false;
+        }
+        // To dig it, also where it can be seen (like a player: not through other blocks); one walk for that
+        boolean unseen = dig && near && !sightWalked && !Goal.canSee(level, bot.getEyePosition(), pos);
+        if (!near || !dig && inside || unseen) {
             Navigator navigator = bot.navigator();
             if (!navigator.isActive() || jobTicks == 1) {
-                navigator.navigate(Goal.reach(pos), JOB_NODES);
+                // (one walled in all round is never in sight: just close by, it's swapped where it is)
+                navigator.navigate(dig && openFace(level, pos) ? Goal.reachVisible(level, pos) : Goal.reach(pos), JOB_NODES);
             }
-            if (navigator.tick() == Navigator.Status.FAILED) {
-                giveUp(build);
+            Navigator.Status status = navigator.tick();
+            if (status == Navigator.Status.FAILED) {
+                if (dig && near) {
+                    sightWalked = true; // (nowhere to see it from: what's in the way, if it may go, is dug first)
+                } else {
+                    giveUp(build);
+                }
+            } else if (status == Navigator.Status.SUCCESS && dig) {
+                sightWalked = true;
             }
             return Status.RUNNING;
         }
