@@ -6,6 +6,8 @@ import com.minebot.bot.action.BlockPlacer;
 import com.minebot.bot.action.Inv;
 import com.minebot.bot.build.GreatBuild;
 import com.minebot.bot.build.LegacyBlocks;
+import com.minebot.bot.build.Schematic;
+import com.minebot.bot.world.BlockRules;
 import com.minebot.bot.craft.Target;
 import com.minebot.bot.path.Goal;
 import com.minebot.bot.path.Navigator;
@@ -22,7 +24,11 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -518,10 +524,19 @@ public class GreatBuildTask extends Task {
         }
         bot.navigator().stop();
         if (dig) {
-            breaker.start(pos);
+            // Only what it can see, like a player: something in the way is dug first (if it may be)
+            BlockPos target = inSight(build, pos);
+            if (target == null) {
+                bot.debug("great build: {} is behind something to keep; from another side later", pos.toShortString());
+                giveUp(build);
+                return Status.RUNNING;
+            }
+            breaker.start(target);
             BlockBreaker.Result result = breaker.tick();
             if (result == BlockBreaker.Result.FAILED) {
                 giveUp(build);
+            } else if (result == BlockBreaker.Result.SUCCESS && !target.equals(pos)) {
+                build.recheck(level, target); // (the block in the way: maybe a cell of the plan)
             } else if (result == BlockBreaker.Result.SUCCESS && current.type() == GreatBuild.JobType.DIG) {
                 build.done(level, current);
                 job = null;
@@ -537,6 +552,26 @@ public class GreatBuildTask extends Task {
         build.done(level, current);
         job = null;
         return Status.RUNNING;
+    }
+
+    /**
+     * The block itself if it's in sight; else the block in the way, if that's to go anyway (a cell
+     * of the plan to dig out, or plain ground off the plan); null if it's part of the building.
+     */
+    private @Nullable BlockPos inSight(GreatBuild build, BlockPos pos) {
+        ServerLevel level = bot.level();
+        BlockHitResult hit = level.clip(new ClipContext(bot.getEyePosition(), Vec3.atCenterOf(pos),
+            ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, bot));
+        if (hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(pos)) {
+            return pos;
+        }
+        BlockPos blocker = hit.getBlockPos();
+        int index = build.indexOf(blocker);
+        Schematic plan = build.plan(level.getServer());
+        if (index >= 0 && plan != null) {
+            return plan.at(index).kind() == LegacyBlocks.Kind.AIR ? blocker : null;
+        }
+        return BlockRules.canBreak(level, blocker, level.getBlockState(blocker)) ? blocker : null;
     }
 
     private static Predicate<ItemStack> fillFor(LegacyBlocks.Spec spec) {
