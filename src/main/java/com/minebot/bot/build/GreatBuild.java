@@ -402,7 +402,7 @@ public final class GreatBuild extends SavedData {
                 startSession(server);
             }
         }
-        if (sessionEnd >= 0) {
+        if (sessionEnd >= 0 || !sentEarly.isEmpty()) { // (or bots sent early at work there)
             verify(level, VERIFY_PER_TICK);
         } else if (orders.isEmpty() && server.getTickCount() % 200 == 0 && !com.minebot.bot.BotManager.all().isEmpty()) {
             makeOrders(server); // (none were on when they were handed out)
@@ -590,7 +590,7 @@ public final class GreatBuild extends SavedData {
         }
         boolean fill = Inv.count(bot, FILL) > 0;
         boolean dirt = Inv.count(bot, stack -> stack.is(Items.DIRT)) > 0;
-        for (int radius : new int[] {20, 200}) {
+        for (int radius : new int[] {8, 20, 200}) { // (close by first: from where it stands, without walking)
             if (any) {
                 Job job = scan(bot, radius, true, index -> {
                     LegacyBlocks.Spec spec = schematic.at(index);
@@ -641,10 +641,16 @@ public final class GreatBuild extends SavedData {
         if (x0 > x1 || z0 > z1) {
             return null;
         }
+        // The lowest (or, digging, highest) layer with work, and a few above it: a cell close by a layer
+        // up is better than walking across the site for the layer below (it walked more than it built)
+        Job best = null;
+        double bestScore = Double.MAX_VALUE;
+        int firstStep = -1;
         for (int step = 0; step < schematic.height(); step++) {
+            if (firstStep >= 0 && step > firstStep + LAYER_WINDOW) {
+                break;
+            }
             int y = bottomUp ? step : schematic.height() - 1 - step;
-            Job best = null;
-            double bestDistance = Double.MAX_VALUE;
             for (int z = z0; z <= z1; z++) {
                 int from = schematic.index(x0, y, z);
                 int to = schematic.index(x1, y, z);
@@ -671,19 +677,23 @@ public final class GreatBuild extends SavedData {
                     if (!workable(level, pos, state, type) || ProtectedAreas.isProtected(level, pos)) {
                         continue;
                     }
-                    double distance = bot.blockPosition().distSqr(pos);
-                    if (distance < bestDistance) {
-                        bestDistance = distance;
+                    if (firstStep < 0) {
+                        firstStep = step;
+                    }
+                    double score = Math.sqrt(bot.blockPosition().distSqr(pos)) + LAYER_COST * (step - firstStep);
+                    if (score < bestScore) {
+                        bestScore = score;
                         best = new Job(type, pos, index, spec);
                     }
                 }
             }
-            if (best != null) {
-                return best;
-            }
         }
-        return null;
+        return best;
     }
+
+    /** Layers above the lowest one with work that are looked at too, and what a layer up counts as (blocks of walking). */
+    private static final int LAYER_WINDOW = 3;
+    private static final double LAYER_COST = 6;
 
     /** Can this job be started on this block as it is? */
     private static boolean workable(ServerLevel level, BlockPos pos, BlockState state, JobType type) {
