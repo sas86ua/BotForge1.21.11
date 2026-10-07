@@ -88,7 +88,8 @@ public final class GreatBuild extends SavedData {
         Codec.LONG.optionalFieldOf("dug", 0L).forGetter(b -> b.dug),
         Codec.INT.listOf().optionalFieldOf("chunk_done", List.of()).forGetter(b -> b.chunkDone),
         Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC.listOf()).optionalFieldOf("camp", Map.of()).forGetter(b -> b.camp),
-        UUIDUtil.STRING_CODEC.listOf().optionalFieldOf("sent_early", List.of()).forGetter(b -> List.copyOf(b.sentEarly))
+        UUIDUtil.STRING_CODEC.listOf().optionalFieldOf("sent_early", List.of()).forGetter(b -> List.copyOf(b.sentEarly)),
+        Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC).optionalFieldOf("camp_chest", Map.of()).forGetter(b -> b.campChest)
     ).apply(i, GreatBuild::new));
     private static final SavedDataType<GreatBuild> TYPE =
         new SavedDataType<>("minebot_great_build", GreatBuild::new, CODEC, null);
@@ -115,6 +116,8 @@ public final class GreatBuild extends SavedData {
     private final Map<UUID, List<BlockPos>> camp;
     /** Bots sent off to the site ahead of time (an admin's "go"): they go now and wait there for the start. */
     private final Set<UUID> sentEarly = new HashSet<>();
+    /** Each bot's chest at its camp (anyone at the site may use it). */
+    private final Map<UUID, BlockPos> campChest;
 
     // ---- not saved ------------------------------------------------------------------------------
     private @Nullable Schematic plan;
@@ -139,12 +142,12 @@ public final class GreatBuild extends SavedData {
     private final Map<Item, Integer> materialTotals = new LinkedHashMap<>();
 
     public GreatBuild() {
-        this("", BlockPos.ZERO, -1, -1, 0, Map.of(), Map.of(), 0, 0, List.of(), Map.of(), List.of());
+        this("", BlockPos.ZERO, -1, -1, 0, Map.of(), Map.of(), 0, 0, List.of(), Map.of(), List.of(), Map.of());
     }
 
     private GreatBuild(String file, BlockPos centre, long nextDay, long sessionEnd, int sessions,
                        Map<UUID, Map<String, Integer>> orders, Map<String, Integer> failures, long placed, long dug,
-                       List<Integer> chunkDone, Map<UUID, List<BlockPos>> camp, List<UUID> sentEarly) {
+                       List<Integer> chunkDone, Map<UUID, List<BlockPos>> camp, List<UUID> sentEarly, Map<UUID, BlockPos> campChest) {
         this.file = file;
         this.centre = centre;
         this.nextDay = nextDay;
@@ -159,6 +162,7 @@ public final class GreatBuild extends SavedData {
         this.camp = new HashMap<>();
         camp.forEach((uuid, list) -> this.camp.put(uuid, new ArrayList<>(list)));
         this.sentEarly.addAll(sentEarly);
+        this.campChest = new HashMap<>(campChest);
     }
 
     public static GreatBuild get(MinecraftServer server) {
@@ -248,6 +252,7 @@ public final class GreatBuild extends SavedData {
         chunkDone.clear();
         orders.clear();
         camp.clear(); // (a new site: new camps)
+        campChest.clear();
         failures.clear();
         placed = 0;
         dug = 0;
@@ -858,6 +863,29 @@ public final class GreatBuild extends SavedData {
             centre.offset(CAMP_FURNACES[k][0], 0, CAMP_FURNACES[k][1]));
     }
 
+    /** Where this bot's camp chest goes: in front of its fire, across from the furnace behind it; or null. */
+    public @Nullable BlockPos campChestSpot(BotPlayer bot) {
+        BlockPos centre = campCentre(bot);
+        return centre == null ? null
+            : bot.level().getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, centre.offset(0, 0, 2));
+    }
+
+    /** This bot's camp chest, if it's still there. */
+    public @Nullable BlockPos campChest(BotPlayer bot) {
+        BlockPos pos = campChest.get(bot.getUUID());
+        return pos != null && (!bot.level().isLoaded(pos) || bot.level().getBlockState(pos).is(Blocks.CHEST)) ? pos : null;
+    }
+
+    public void setCampChest(BotPlayer bot, BlockPos pos) {
+        campChest.put(bot.getUUID(), pos.immutable());
+        setDirty();
+    }
+
+    /** Every camp's chest: anyone at the site may put in or take out (it's all for the build). */
+    public java.util.Collection<BlockPos> allCampChests() {
+        return campChest.values();
+    }
+
     /** This bot's furnaces at its camp (those still standing). */
     public List<BlockPos> campFurnaces(BotPlayer bot) {
         List<BlockPos> mine = camp.getOrDefault(bot.getUUID(), List.of());
@@ -867,6 +895,15 @@ public final class GreatBuild extends SavedData {
             if (!bot.level().isLoaded(pos) || bot.level().getBlockState(pos).is(Blocks.FURNACE)) {
                 result.add(pos);
             }
+        }
+        return result;
+    }
+
+    /** Every bot's camp furnaces: what's done in them anyone at the site may take out (it's all for the build). */
+    public List<BlockPos> allCampFurnaces() {
+        List<BlockPos> result = new ArrayList<>();
+        for (List<BlockPos> one : camp.values()) {
+            result.addAll(one.subList(Math.min(1, one.size()), one.size()));
         }
         return result;
     }

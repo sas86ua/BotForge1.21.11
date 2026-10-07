@@ -24,8 +24,20 @@ public class FurnaceOutputTask extends Task {
     private @Nullable Approach approach;
 
     public FurnaceOutputTask(BotPlayer bot) {
+        this(bot, ready(bot));
+    }
+
+    /** That furnace's output (at the Great Build: any camp's, it's all for the build). */
+    public FurnaceOutputTask(BotPlayer bot, @Nullable BlockPos furnace) {
         super(bot);
-        this.furnace = ready(bot);
+        this.furnace = furnace;
+    }
+
+    /** Gone out with something in the output slot. */
+    public static boolean finished(BotPlayer bot, BlockPos pos) {
+        return bot.level().isLoaded(pos) && bot.level().getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity entity
+            && !entity.getItem(SLOT_RESULT).isEmpty()
+            && !bot.level().getBlockState(pos).getOptionalValue(AbstractFurnaceBlock.LIT).orElse(false);
     }
 
     public static boolean wanted(BotPlayer bot) {
@@ -71,7 +83,7 @@ public class FurnaceOutputTask extends Task {
         bot.controller().lookAt(Vec3.atCenterOf(furnace));
         ItemStack result = entity.getItem(SLOT_RESULT);
         if (!result.isEmpty()) {
-            bot.debug("took {} {} out of my furnace", result.getCount(), result.getItem());
+            bot.debug("took {} {} out of the furnace at {}", result.getCount(), result.getItem(), furnace.toShortString());
             entity.setItem(SLOT_RESULT, ItemStack.EMPTY);
             Inv.give(bot, result);
             entity.awardUsedRecipesAndPopExperience(bot); // (as a player gets for taking it)

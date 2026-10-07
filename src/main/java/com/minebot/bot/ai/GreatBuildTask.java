@@ -21,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -116,6 +117,123 @@ public class GreatBuildTask extends Task {
     public static boolean isAway(BotPlayer bot) {
         Stage stage = AWAY.get(bot.getUUID());
         return stage != null && stage != Stage.PACK;
+    }
+
+    /** What a digger puts in the camp chest: what digging gives. */
+    private static final Predicate<ItemStack> DUG = stack -> Stash.isBulk(stack) || stack.is(Items.GRAVEL) || stack.is(Items.SAND)
+        || stack.is(Items.FLINT) || stack.is(Items.CLAY_BALL);
+    /** A chest errand (putting in, taking out, putting one down) at most this often: one that failed isn't tried every tick. */
+    private static final int CHEST_RETRY_TICKS = 20 * 30;
+    private long nextChestAt;
+    private long nextTakeAt;
+    private int chestPlaceTicks;
+
+    /** The digger's bag is full: what it dug into its camp chest (put down first, if there's none). Null: no can do. */
+    private @Nullable Status dumpDug(GreatBuild build) {
+        ServerLevel level = bot.level();
+        long now = level.getGameTime();
+        if (now < nextChestAt || Inv.count(bot, DUG) == 0) {
+            return null;
+        }
+        BlockPos chest = build.campChest(bot);
+        if (chest != null) {
+            nextChestAt = now + CHEST_RETRY_TICKS;
+            if (!(level.getBlockEntity(chest) instanceof ChestBlockEntity entity) || !hasRoom(entity)) {
+                return null; // (full: it fills and builds with what it carries meanwhile)
+            }
+            child = CampChestTask.put(bot, chest, DUG);
+            return Status.RUNNING;
+        }
+        BlockPos spot = build.campChestSpot(bot);
+        if (spot == null) {
+            return null;
+        }
+        if (Inv.count(bot, stack -> stack.is(Items.CHEST)) == 0) {
+            nextChestAt = now + CHEST_RETRY_TICKS; // (if it can't make one: tried again later)
+            bot.debug("great build: making a chest for my camp");
+            child = new ObtainTask(bot, Target.of(Items.CHEST, 1), 0);
+            return Status.RUNNING;
+        }
+        if (level.getBlockState(spot).is(Blocks.CHEST) || ++chestPlaceTicks > JOB_TICKS || !level.getBlockState(spot).canBeReplaced()) {
+            if (level.getBlockState(spot).is(Blocks.CHEST)) {
+                build.setCampChest(bot, spot);
+            }
+            chestPlaceTicks = 0;
+            nextChestAt = now + CHEST_RETRY_TICKS * 10; // (no room there: some other time)
+            return null;
+        }
+        if (!bot.isWithinBlockInteractionRange(spot, 0.5) || bot.getBoundingBox().intersects(new AABB(spot))) {
+            Navigator navigator = bot.navigator();
+            if (!navigator.isActive()) {
+                navigator.navigate(Goal.reach(spot), JOB_NODES);
+            }
+            navigator.tick();
+            return Status.RUNNING;
+        }
+        bot.navigator().stop();
+        if (BlockPlacer.place(bot, spot, stack -> stack.is(Items.CHEST), Direction.DOWN, null) && level.getBlockState(spot).is(Blocks.CHEST)) {
+            build.setCampChest(bot, spot);
+            chestPlaceTicks = 0;
+            bot.debug("great build: a chest at my camp, {}", spot.toShortString());
+        }
+        return Status.RUNNING;
+    }
+
+    private static boolean hasRoom(ChestBlockEntity chest) {
+        for (int i = 0; i < chest.getContainerSize(); i++) {
+            if (chest.getItem(i).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Out of materials: building blocks (or fill) out of the nearest camp chest with some, anyone's. */
+    private boolean takeFromCampChest(GreatBuild build) {
+        ServerLevel level = bot.level();
+        long now = level.getGameTime();
+        if (now < nextTakeAt || Inv.freeSlots(bot) <= 3) {
+            return false;
+        }
+        nextTakeAt = now + CHEST_RETRY_TICKS;
+        Predicate<ItemStack> useful = stack -> build.isMaterial(stack.getItem()) || GreatBuild.FILL.test(stack);
+        BlockPos best = null;
+        double bestDistance = (double) CHEST_RANGE * CHEST_RANGE;
+        for (BlockPos pos : build.allCampChests()) {
+            double distance = pos.distSqr(bot.blockPosition());
+            if (distance < bestDistance && level.isLoaded(pos) && level.getBlockEntity(pos) instanceof ChestBlockEntity chest
+                && Stash.count(chest, useful) > 0) {
+                best = pos;
+                bestDistance = distance;
+            }
+        }
+        if (best == null) {
+            return false;
+        }
+        child = CampChestTask.take(bot, best, useful, (Inv.freeSlots(bot) - 3) * 64);
+        return true;
+    }
+
+    /** Camp chests this close are used. */
+    private static final int CHEST_RANGE = 96;
+
+    /** Camp furnaces are looked at this often, and only those this close. */
+    private static final int OUTPUT_CHECK_TICKS = 20 * 30;
+    private long nextOutputCheck;
+    private static final int OUTPUT_RANGE = 48;
+
+    /** The nearest camp furnace (anyone's) that has gone out with something done in it, or null. */
+    private @Nullable BlockPos doneFurnace(GreatBuild build) {
+        BlockPos best = null;
+        double bestDistance = (double) OUTPUT_RANGE * OUTPUT_RANGE;
+        for (BlockPos pos : build.allCampFurnaces()) {
+            double distance = pos.distSqr(bot.blockPosition());
+            if (distance < bestDistance && FurnaceOutputTask.finished(bot, pos)) {
+                best = pos;
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
     /** About this share of the bots at the site clear it first (digging out what the plan has empty), the rest build. */
@@ -351,14 +469,34 @@ public class GreatBuildTask extends Task {
                 return camp;
             }
         }
+        if (job == null && Inv.freeSlots(bot) >= 3 && bot.level().getGameTime() >= nextOutputCheck) {
+            // What's done in the camps' furnaces (its own or anyone's, all of it is for the build): taken out to build with
+            nextOutputCheck = bot.level().getGameTime() + OUTPUT_CHECK_TICKS; // (one it can't get to isn't tried every tick)
+            BlockPos ready = doneFurnace(build);
+            if (ready != null) {
+                child = new FurnaceOutputTask(bot, ready);
+                return Status.RUNNING;
+            }
+        }
         if (job == null) {
-            Stash.makeRoom(bot, 3);
             boolean digger = isDigger(bot);
+            if (digger && Inv.freeSlots(bot) < 3) {
+                // Bag full of what it dug: into the camp chest, to dig on (else it fills and builds with it;
+                // it isn't thrown away, as rubbish would be)
+                Status dump = dumpDug(build);
+                if (dump != null) {
+                    return dump;
+                }
+            }
+            Stash.makeRoom(bot, 3);
             job = build.nextJob(bot, true, digger);
             boolean carries = carriesMaterial(build);
-            if ((job == null || job.type() != GreatBuild.JobType.PLACE) && !carries && !(digger && job != null) && restock(build)) {
-                dropJob(build);
-                return Status.RUNNING;
+            if ((job == null || job.type() != GreatBuild.JobType.PLACE) && !carries && !(digger && job != null)) {
+                // Out of materials: from a camp chest if there's some there, else from the mine under the site
+                if (takeFromCampChest(build) || restock(build)) {
+                    dropJob(build);
+                    return Status.RUNNING;
+                }
             }
             if (job == null) {
                 if (++idleTicks % 200 == 1) {
