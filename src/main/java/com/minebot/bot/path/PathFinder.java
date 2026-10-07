@@ -48,6 +48,8 @@ public class PathFinder {
     private static final long HOME_NO_DIG = 8;
     /** Extra cost of a step right beside lava or fire. */
     private static final double HAZARD_PENALTY = 60;
+    /** Lava or fire, by block state (asked for the blocks round every spot looked at). */
+    private static final java.util.Map<BlockState, Boolean> HAZARD = new java.util.concurrent.ConcurrentHashMap<>();
     private static final double CLIMB = 6.0;
     /** Putting up a ladder: under a pillar, but well over climbing one that's there (a walk round to it is cheaper). */
     private static final double LADDER_COST = 16.0;
@@ -378,7 +380,6 @@ public class PathFinder {
         if (cost == INF || y <= level.getMinY() || y >= level.getMaxY() || options.avoid().contains(BlockPos.asLong(x, y, z))) {
             return;
         }
-        cost += hazardPenalty(x, y, z);
         if (options.zoneCenter() != null) {
             long dx = x - options.zoneCenter().getX();
             long dz = z - options.zoneCenter().getZ();
@@ -388,12 +389,16 @@ public class PathFinder {
         }
         long key = BlockPos.asLong(x, y, z);
         Node node = nodes.get(key);
-        double g = from.g + cost;
         if (node == null) {
             node = new Node(x, y, z);
             node.h = goal.distance(x, y, z) * HEURISTIC;
+            node.hazard = hazardPenalty(x, y, z); // (looked at once per spot, not for every way into it)
             nodes.put(key, node);
-        } else if (node.closed || g >= node.g) {
+        } else if (node.closed) {
+            return;
+        }
+        double g = from.g + cost + node.hazard;
+        if (g >= node.g) {
             return;
         }
         node.g = g;
@@ -412,7 +417,7 @@ public class PathFinder {
                         continue;
                     }
                     BlockState state = state(x + dx, y + dy, z + dz);
-                    if (state != null && (BlockRules.isLava(state) || state.is(BlockTags.FIRE))) {
+                    if (state != null && !state.isAir() && HAZARD.computeIfAbsent(state, s -> BlockRules.isLava(s) || s.is(BlockTags.FIRE))) {
                         return HAZARD_PENALTY;
                     }
                 }
@@ -565,6 +570,7 @@ public class PathFinder {
         final int z;
         double g = INF;
         double h;
+        double hazard;
         @Nullable Node parent;
         Move move;
         boolean closed;
