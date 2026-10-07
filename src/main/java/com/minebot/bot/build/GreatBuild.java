@@ -660,7 +660,7 @@ public final class GreatBuild extends SavedData {
                         continue;
                     }
                     JobType type = kind.of(index);
-                    if (type == null) {
+                    if (type == null || bottomUp && coversPending(index)) {
                         continue;
                     }
                     BlockPos pos = worldPos(index);
@@ -689,6 +689,23 @@ public final class GreatBuild extends SavedData {
             }
         }
         return best;
+    }
+
+    /**
+     * Something still to be put in lower down this cell's column (right under it, or under the air of a room or
+     * a passage): a block here would cover it up, out of reach. Each column goes up from the bottom.
+     */
+    private boolean coversPending(int index) {
+        Schematic schematic = plan;
+        int layer = schematic.width() * schematic.length();
+        for (int below = index - layer; below >= 0; below -= layer) {
+            LegacyBlocks.Kind kind = schematic.at(below).kind();
+            if (kind == LegacyBlocks.Kind.AIR || kind == LegacyBlocks.Kind.SKIP) {
+                continue; // (open space between: what's under it counts)
+            }
+            return pending.get(below);
+        }
+        return false;
     }
 
     /** Layers above the lowest one with work that are looked at too, and what a layer up counts as (blocks of walking). */
