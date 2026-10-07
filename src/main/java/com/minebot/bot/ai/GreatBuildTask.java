@@ -116,7 +116,11 @@ public class GreatBuildTask extends Task {
     /** On the road to the build, at it, or on the way back. */
     public static boolean isAway(BotPlayer bot) {
         Stage stage = AWAY.get(bot.getUUID());
-        return stage != null && stage != Stage.PACK;
+        if (stage == null) {
+            // (just logged in at the site, a session on: there for the build, not for its chores at home)
+            return sessionOn(bot) && GreatBuild.nearSite(bot.blockPosition());
+        }
+        return stage != Stage.PACK;
     }
 
     /** What a digger puts in the camp chest: what digging gives. */
