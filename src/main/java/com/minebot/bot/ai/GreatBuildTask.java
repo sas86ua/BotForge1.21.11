@@ -79,6 +79,7 @@ public class GreatBuildTask extends Task {
     private boolean toolPacked;
     private boolean campPacked;
     private boolean campfirePacked;
+    private boolean bagEmptied;
     private boolean campDone;
     private boolean campfireDone;
     private int campTries;
@@ -436,6 +437,14 @@ public class GreatBuildTask extends Task {
                 && build.campFurnaces(bot).size() < GreatBuild.campFurnaceCount(bot)) { // (a camp to set up still)
                 campfirePacked = true;
                 child = new ObtainTask(bot, Target.of(Items.CAMPFIRE, 1), 0);
+                return Status.RUNNING;
+            }
+            if (!bagEmptied && !bot.memory().chests().isEmpty() && !Stash.toStore(bot).isEmpty()) {
+                // What it won't need there into the chests first (spare tools, seeds, what it brought home...): a full
+                // bag left most of its order at home (Makena took none of hers once). Its order and the plan's blocks stay
+                bagEmptied = true;
+                bot.debug("great build: emptying my bag into the chests to make room for my order");
+                child = ChestTask.store(bot);
                 return Status.RUNNING;
             }
             // All it got ready for its order first, then any other blocks the plan uses that it has at home,

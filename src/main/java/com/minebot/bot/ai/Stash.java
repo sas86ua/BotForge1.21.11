@@ -114,6 +114,9 @@ public final class Stash {
             if (stack.isEmpty() || interrupted != null && interrupted.accepts().test(stack)) {
                 continue; // (nor what the task it broke off was getting: it goes on with it after)
             }
+            if (GreatBuildTask.sessionOn(bot) && (forGreatBuild(bot, stack) || isBuildMaterial(bot, stack))) {
+                continue; // (packed for the Great Build: it goes along, not back in the chest)
+            }
             if (isTool(stack)) {
                 if (isSpare(bot, slot)) {
                     result.put(slot, stack.getCount()); // spare, worse tools
@@ -133,6 +136,11 @@ public final class Stash {
             }
         }
         return result;
+    }
+
+    private static boolean isBuildMaterial(BotPlayer bot, ItemStack stack) {
+        com.minebot.bot.build.GreatBuild build = com.minebot.bot.build.GreatBuild.get(bot.level().getServer());
+        return build.exists() && build.isMaterial(stack.getItem());
     }
 
     /** Ordered for the Great Build, or (away at it) a block it builds with. */
