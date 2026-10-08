@@ -197,7 +197,10 @@ public class GreatBuildTask extends Task {
             return Status.RUNNING;
         }
         bot.navigator().stop();
-        if (BlockPlacer.place(bot, spot, stack -> stack.is(Items.CHEST), Direction.DOWN, null) && level.getBlockState(spot).is(Blocks.CHEST)) {
+        // Facing the fire like the camp's others (put down looking away from the fire, standing up): beside one, a
+        // double chest (one turned another way, or put down crouching, stays single)
+        bot.setShiftKeyDown(false);
+        if (BlockPlacer.place(bot, spot, stack -> stack.is(Items.CHEST), Direction.DOWN, Direction.SOUTH) && level.getBlockState(spot).is(Blocks.CHEST)) {
             build.setCampChest(bot, spot);
             chestPlaceTicks = 0;
             bot.debug("great build: a chest at my camp, {}", spot.toShortString());
