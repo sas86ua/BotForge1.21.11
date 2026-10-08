@@ -565,8 +565,15 @@ public class Navigator {
     }
 
     private void move(Vec3 destination, boolean jump) {
-        // Keep the head above water while swimming along
-        boolean swim = bot.isInWater() && destination.y >= Math.floor(bot.getY());
+        // Keep the head above water while swimming along; but on a way under the water (to build something on the
+        // bottom, say) it keeps down there at the way's depth, rising only if it sank below it (always floating
+        // up, it never got down to where it was going)
+        boolean swim = false;
+        if (bot.isInWater()) {
+            BlockPos head = BlockPos.containing(destination).above();
+            boolean underwater = bot.level().getFluidState(head).is(net.minecraft.tags.FluidTags.WATER);
+            swim = underwater ? bot.getY() < destination.y - 0.2 : destination.y >= Math.floor(bot.getY());
+        }
         bot.controller().moveTowards(destination, shouldSprint(), jump || swim);
     }
 
