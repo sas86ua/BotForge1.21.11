@@ -399,6 +399,27 @@ public class HouseTask extends Task {
                 return null; // something's built there already
             }
         }
+        // Fields: its own and other bots' (with a path round), and any farmland at all (a player's): never built over
+        for (BotMemory any : BotRegistry.get(level.getServer()).all()) {
+            for (BotMemory.Farm farm : any.farms()) {
+                BlockPos f = farm.origin();
+                if (f.getX() - 2 <= o.getX() + sx - 1 && f.getX() + farm.size() + 1 >= o.getX()
+                    && f.getZ() - 2 <= o.getZ() + sz - 1 && f.getZ() + farm.size() + 1 >= o.getZ()) {
+                    rejected.merge("a field", 1, Integer::sum);
+                    return null;
+                }
+            }
+        }
+        for (int x = -1; x <= sx; x++) {
+            for (int z = -1; z <= sz; z++) {
+                int gx = o.getX() + x;
+                int gz = o.getZ() + z;
+                if (level.getBlockState(new BlockPos(gx, ground(level, gx, gz) - 1, gz)).is(Blocks.FARMLAND)) {
+                    rejected.merge("a field", 1, Integer::sum);
+                    return null;
+                }
+            }
+        }
         for (BotMemory other : BotRegistry.get(level.getServer()).all()) {
             if (other != bot.memory() && other.bed() != null && other.bed().closerThan(o.offset(sx / 2, 0, sz / 2), 16 + Math.max(sx, sz) / 2)) {
                 rejected.merge("another bot's bed", 1, Integer::sum);
