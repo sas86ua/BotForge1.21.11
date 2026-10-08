@@ -39,7 +39,9 @@ public final class Villages extends SavedData {
     }
 
     private static final Codec<Villages> CODEC = RecordCodecBuilder.create(i -> i.group(
-        Project.CODEC.listOf().optionalFieldOf("projects", List.of()).forGetter(v -> v.projects)
+        Project.CODEC.listOf().optionalFieldOf("projects", List.of()).forGetter(v -> v.projects),
+        Codec.unboundedMap(Codec.STRING, net.minecraft.core.UUIDUtil.STRING_CODEC.listOf()).optionalFieldOf("trails", Map.of())
+            .forGetter(v -> v.trails)
     ).apply(i, Villages::new));
     private static final SavedDataType<Villages> TYPE = new SavedDataType<>("minebot_villages", Villages::new, CODEC, null);
 
@@ -49,13 +51,37 @@ public final class Villages extends SavedData {
     private static final Map<Project, HousePlan> PLANS = new ConcurrentHashMap<>();
 
     private final List<Project> projects;
+    /** Who has made a path from its house to which building (by the building's origin). */
+    private final Map<String, List<java.util.UUID>> trails;
 
     public Villages() {
-        this(List.of());
+        this(List.of(), Map.of());
     }
 
-    private Villages(List<Project> projects) {
+    private Villages(List<Project> projects, Map<String, List<java.util.UUID>> trails) {
         this.projects = new ArrayList<>(projects);
+        this.trails = new java.util.HashMap<>();
+        trails.forEach((key, bots) -> this.trails.put(key, new ArrayList<>(bots)));
+    }
+
+    /** A finished building of its village it hasn't made a path to from its house yet, or null. */
+    public @Nullable Project trailToMake(BotPlayer bot) {
+        BlockPos home = homeOf(bot.memory());
+        if (home == null) {
+            return null;
+        }
+        for (Project project : projects) {
+            if (project.done() && project.origin().closerThan(home, RADIUS + 64)
+                && !trails.getOrDefault(String.valueOf(project.origin().asLong()), List.of()).contains(bot.getUUID())) {
+                return project;
+            }
+        }
+        return null;
+    }
+
+    public void trailMade(BotPlayer bot, Project project) {
+        trails.computeIfAbsent(String.valueOf(project.origin().asLong()), k -> new ArrayList<>()).add(bot.getUUID());
+        setDirty();
     }
 
     public static Villages get(MinecraftServer server) {

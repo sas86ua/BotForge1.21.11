@@ -174,6 +174,8 @@ public final class Needs {
         // Then, the village's houses all built: its church and library, together (see Villages)
         new Need("village build", bot -> !GreatBuildTask.isAway(bot) && !GreatBuildTask.sessionOn(bot) && VillageBuildTask.wanted(bot),
             VillageBuildTask::new),
+        // A building of its village finished: a path to it from its house
+        new Need("trail", bot -> !GreatBuildTask.isAway(bot) && !GreatBuildTask.sessionOn(bot) && TrailTask.wanted(bot), TrailTask::new),
         // Then fields by the house: wheat, and potatoes / carrots if it has some
         new Need("farm", FarmTask::wanted, FarmTask::new),
         // Wheat from the fields (bag and chests): bread, three wheat a loaf
