@@ -38,6 +38,7 @@ public class SleepTask extends Task {
     /** Is it night and is there a bed to sleep in? */
     public static boolean wanted(BotPlayer bot) {
         return Home.isNight(bot) && !JourneyTask.isTravelling(bot) && !GreatBuildTask.isAway(bot)
+            && !GreatBuildTask.sessionOn(bot) // (time to set off for the Great Build: no going to bed)
             && (homeBed(bot) != null || HomeFinder.findBedForTheNight(bot, NEARBY_BED_RANGE) != null);
     }
 
@@ -55,6 +56,12 @@ public class SleepTask extends Task {
         if (bot.isSleeping()) {
             slept = true;
             bot.controller().releaseInputs();
+            if (GreatBuildTask.sessionOn(bot)) {
+                // (time to set off for the Great Build, a long way to go: up, and off)
+                bot.debug("up: time to set off for the great build");
+                bot.stopSleepInBed(true, true);
+                return Status.SUCCESS;
+            }
             return Status.RUNNING; // wakes up by itself in the morning
         }
         if (slept || !Home.isNight(bot)) {
@@ -86,6 +93,9 @@ public class SleepTask extends Task {
     @Override
     public void stop() {
         bot.navigator().stop();
+        if (bot.isSleeping()) {
+            bot.stopSleepInBed(true, true); // (something more urgent: out of bed for it - it lay there till morning)
+        }
         if (borrowed && slept) {
             // Sleeping in someone else's bed moved our respawn point there; put it back
             bot.setRespawnPosition(ownRespawn, false);
