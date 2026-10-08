@@ -522,7 +522,7 @@ public class HouseTask extends Task {
     /** The hut stays as the workshop: its chests and furnace remain the bot's. */
     private void keepHutAsWorkshop() {
         BotMemory memory = bot.memory();
-        if (memory.home() != null && memory.workshop() == null) {
+        if (memory.home() != null && memory.workshop() == null && memory.builtHome()) { // (a bed in someone else's house: that's no workshop of its own)
             memory.setWorkshop(memory.home().pos());
         }
     }
@@ -531,6 +531,7 @@ public class HouseTask extends Task {
         ServerLevel level = bot.level();
         BotMemory memory = bot.memory();
         BlockPos head = cellOf('B').pos().relative(plan.front().getOpposite());
+        Home.returnBorrowed(bot); // (what it used in someone else's house stays there)
         keepHutAsWorkshop();
         memory.setHome(GlobalPos.of(level.dimension(), plan.center()), true);
         memory.setBed(head);

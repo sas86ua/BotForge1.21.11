@@ -14,6 +14,7 @@ import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.FurnaceBlock;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
@@ -66,19 +67,37 @@ public final class Home {
                 }
             }
         }
-        if (!memory.houseDone() && memory.bed() != null && level.isLoaded(memory.bed())
-            && (memory.furnace() == null || memory.craftingTable() == null || memory.chests().isEmpty())) {
+        if (!memory.builtHome() && !memory.houseDone() && memory.bed() != null && level.isLoaded(memory.bed())) {
             adoptNearby(bot, level, memory.bed());
         }
     }
 
-    /** How far from its bed (not a house of its own: a village's, say) it takes what stands about as its own. */
+    /** Moved into a house of its own: what it used in someone else's is left there, not its any more. */
+    public static void returnBorrowed(BotPlayer bot) {
+        BotMemory memory = bot.memory();
+        for (BlockPos pos : memory.borrowed()) {
+            memory.chests().remove(pos);
+            if (pos.equals(memory.furnace())) {
+                memory.setFurnace(null);
+            }
+            if (pos.equals(memory.craftingTable())) {
+                memory.setCraftingTable(null);
+            }
+        }
+        if (!memory.borrowed().isEmpty()) {
+            bot.debug("my own house now: left the {} things I used in the other one", memory.borrowed().size());
+        }
+        memory.borrowed().clear();
+    }
+
+    /** How far from its bed (not a house of its own: a village's, say) it uses what stands about. */
     private static final int NEARBY_RADIUS = 12;
 
     /**
-     * Living in someone else's house (a village's): the furnace, crafting table and chests nearby, in that
-     * house or the next (a smithy), are its to use, nearest first, if no other bot uses them. What's
-     * still missing after that goes in a yard by the house (see FurnishTask).
+     * Living in someone else's house (a village's, a player's): the furnace, crafting table and chests
+     * there and next door (a smithy) are its to use till it has a house of its own (then they're left,
+     * see {@link #returnBorrowed}), if no other bot uses them. What's still missing after that goes in a
+     * yard by the house (see FurnishTask).
      */
     private static void adoptNearby(BotPlayer bot, ServerLevel level, BlockPos bed) {
         BotMemory memory = bot.memory();
@@ -96,7 +115,7 @@ public final class Home {
         }
         BlockPos furnace = null;
         BlockPos table = null;
-        BlockPos chest = null;
+        List<BlockPos> chests = new ArrayList<>();
         for (BlockPos pos : BlockPos.betweenClosed(bed.offset(-NEARBY_RADIUS, -4, -NEARBY_RADIUS), bed.offset(NEARBY_RADIUS, 4, NEARBY_RADIUS))) {
             net.minecraft.world.level.block.state.BlockState state = level.getBlockState(pos);
             boolean isFurnace = state.is(net.minecraft.world.level.block.Blocks.FURNACE);
@@ -111,21 +130,26 @@ public final class Home {
                 furnace = pos.immutable();
             } else if (isTable && memory.craftingTable() == null && (table == null || distance < table.distSqr(bed))) {
                 table = pos.immutable();
-            } else if (isChest && memory.chests().isEmpty() && (chest == null || distance < chest.distSqr(bed))) {
-                chest = pos.immutable();
+            } else if (isChest && !memory.chests().contains(pos)) {
+                chests.add(pos.immutable());
             }
         }
         if (furnace != null) {
             memory.setFurnace(furnace);
-            bot.debug("the furnace at {} near my bed is mine to use now", furnace.toShortString());
+            memory.borrowed().add(furnace);
+            bot.debug("using the furnace at {} near my bed (till I have a house of my own)", furnace.toShortString());
         }
         if (table != null) {
             memory.setCraftingTable(table);
-            bot.debug("the crafting table at {} near my bed is mine to use now", table.toShortString());
+            memory.borrowed().add(table);
+            bot.debug("using the crafting table at {} near my bed (till I have a house of my own)", table.toShortString());
         }
-        if (chest != null) {
+        for (BlockPos chest : chests) {
             memory.addChest(chest);
-            bot.debug("the chest at {} near my bed is mine to use now", chest.toShortString());
+            memory.borrowed().add(chest);
+        }
+        if (!chests.isEmpty()) {
+            bot.debug("using {} chests near my bed (till I have a house of my own)", chests.size());
         }
     }
 

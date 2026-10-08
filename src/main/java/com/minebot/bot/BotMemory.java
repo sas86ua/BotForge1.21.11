@@ -52,7 +52,8 @@ public class BotMemory {
             Codec.BOOL.optionalFieldOf("house_done", false).forGetter(e -> e.houseDone),
             BlockPos.CODEC.optionalFieldOf("workshop").forGetter(e -> Optional.ofNullable(e.workshop)),
             Farm.CODEC.listOf().optionalFieldOf("farms", List.of()).forGetter(e -> e.farms),
-            BlockPos.CODEC.listOf().optionalFieldOf("scaffold", List.of()).forGetter(e -> e.scaffold)
+            BlockPos.CODEC.listOf().optionalFieldOf("scaffold", List.of()).forGetter(e -> e.scaffold),
+            BlockPos.CODEC.listOf().optionalFieldOf("borrowed", List.of()).forGetter(e -> e.borrowed)
         ).apply(i, Extra::new));
 
         /** Lava near its zone's centre, to burn rubbish in. */
@@ -71,14 +72,16 @@ public class BotMemory {
         private final List<Farm> farms;
         /** Blocks and ladders it put up to climb on, still to take down (see DismantleTask). */
         private final List<BlockPos> scaffold;
+        /** Furniture in someone else's house it uses till it has a house of its own (then it's left there). */
+        private final List<BlockPos> borrowed;
 
         Extra() {
-            this(Optional.empty(), -1L, -1L, Optional.empty(), Direction.NORTH, 0, false, Optional.empty(), List.of(), List.of());
+            this(Optional.empty(), -1L, -1L, Optional.empty(), Direction.NORTH, 0, false, Optional.empty(), List.of(), List.of(), List.of());
         }
 
         private Extra(Optional<GlobalPos> lava, long homeSince, long nextJourney, Optional<BlockPos> houseOrigin,
                       Direction houseFront, int houseTemplate, boolean houseDone, Optional<BlockPos> workshop,
-                      List<Farm> farms, List<BlockPos> scaffold) {
+                      List<Farm> farms, List<BlockPos> scaffold, List<BlockPos> borrowed) {
             this.lava = lava.orElse(null);
             this.homeSince = homeSince;
             this.nextJourney = nextJourney;
@@ -89,6 +92,7 @@ public class BotMemory {
             this.workshop = workshop.orElse(null);
             this.farms = new ArrayList<>(farms);
             this.scaffold = new ArrayList<>(scaffold);
+            this.borrowed = new ArrayList<>(borrowed);
         }
     }
 
@@ -333,6 +337,12 @@ public class BotMemory {
     }
 
     /** What it put up to climb on and hasn't taken down yet (kept over sleeps and restarts). */
+    /** Furniture in someone else's house it uses (see Home#adoptStorage). */
+    public List<BlockPos> borrowed() {
+        changed();
+        return extra.borrowed;
+    }
+
     public List<BlockPos> scaffold() {
         changed(); // (the list is changed in place by whoever has it)
         return extra.scaffold;
