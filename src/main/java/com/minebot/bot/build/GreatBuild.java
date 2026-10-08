@@ -1090,12 +1090,20 @@ public final class GreatBuild extends SavedData {
             // A swap: the taker hands this one as much of something of its own order this one can get (stone
             // bricks, say), so neither ends up with more or less to bring than before
             Map<String, Integer> theirs = orders.computeIfAbsent(taker.getUUID(), u -> new LinkedHashMap<>());
+            // (best something it makes already for its own order; never wool again to one that couldn't get wool)
             String give = null;
             int most = 0;
+            int bestRank = -1;
             for (Map.Entry<String, Integer> entry : theirs.entrySet()) {
-                if (!entry.getKey().equals(key) && !cant.contains(entry.getKey()) && entry.getValue() > most) {
-                    give = entry.getKey();
+                String candidate = entry.getKey();
+                if (candidate.equals(key) || cant.contains(candidate) || isWool(candidate) && cant.stream().anyMatch(GreatBuild::isWool)) {
+                    continue;
+                }
+                int rank = own.containsKey(candidate) ? 1 : 0;
+                if (rank > bestRank || rank == bestRank && entry.getValue() > most) {
+                    give = candidate;
                     most = entry.getValue();
+                    bestRank = rank;
                 }
             }
             if (give != null) {
@@ -1116,6 +1124,11 @@ public final class GreatBuild extends SavedData {
             LOGGER.info("Great build: {} can't get {}, and nobody else is left to ask", bot.getPlainTextName(), key);
         }
         setDirty();
+    }
+
+    private static boolean isWool(String key) {
+        Item item = item(key);
+        return item != null && new ItemStack(item).is(net.minecraft.tags.ItemTags.WOOL);
     }
 
     public void clearFailures() {

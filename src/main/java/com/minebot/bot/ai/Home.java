@@ -73,6 +73,12 @@ public final class Home {
     }
 
     private static final int CLUTTER_CHECK_TICKS = 20 * 60 * 5;
+    /** Stray blocks found in a bot's house (see noteClutter): they go, whatever they stand next to. */
+    private static final java.util.Map<java.util.UUID, java.util.Set<BlockPos>> CLUTTER = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static boolean isClutter(BotPlayer bot, BlockPos pos) {
+        return CLUTTER.getOrDefault(bot.getUUID(), java.util.Set.of()).contains(pos);
+    }
 
     /**
      * A block of dirt or cobblestone (a step it stood on, a block put down in passing) in its house where the
@@ -93,6 +99,7 @@ public final class Home {
                 && !bot.pillars().contains(cell.pos())) {
                 bot.debug("a block of {} in my house at {}; taking it out", state.getBlock().getName().getString(), cell.pos().toShortString());
                 bot.notePillar(cell.pos().immutable());
+                CLUTTER.computeIfAbsent(bot.getUUID(), u -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(cell.pos().immutable());
             }
         }
     }

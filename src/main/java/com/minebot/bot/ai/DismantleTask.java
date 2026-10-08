@@ -58,9 +58,10 @@ public class DismantleTask extends Task {
     private static boolean anyLeft(BotPlayer bot, List<BlockPos> pillars) {
         // Gone, or to stay (filling a shaft, by water: no diving to take a block down); those far off or
         // not loaded wait for it to come back (the list is kept)
+        // (a stray block in its house goes whatever it stands next to: a bed and a wall aren't a shaft)
         pillars.removeIf(pos -> com.minebot.bot.build.GreatBuild.nearSite(pos) || bot.level().isLoaded(pos) && (!isOurBlock(bot, pos)
-            || !bot.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.LADDER) && (inShaft(bot, pos, pillars) || inWall(bot, pos))
-            || touchesWater(bot, pos) || underground(bot, pos)));
+            || !Home.isClutter(bot, pos) && (!bot.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.LADDER)
+                && (inShaft(bot, pos, pillars) || inWall(bot, pos)) || touchesWater(bot, pos) || underground(bot, pos))));
         return pillars.stream().anyMatch(pos -> near(bot, pos));
     }
 
