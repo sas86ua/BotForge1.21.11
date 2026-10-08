@@ -66,7 +66,8 @@ public final class SchematicHouse implements HousePlan {
             LegacyBlocks.Spec spec = s.at(i);
             kinds[i] = ' ';
             switch (spec.kind()) {
-                case AIR -> kinds[i] = '.';
+                // (under the floor of a sunk foundation the ground stays: no pit dug round its stilts)
+                case AIR -> kinds[i] = design.buried() && i / (s.width() * s.length()) <= design.groundLayer() ? ' ' : '.';
                 case GROUND -> kinds[i] = 'g';
                 case SOIL -> kinds[i] = 's';
                 case EXACT -> {
@@ -82,7 +83,8 @@ public final class SchematicHouse implements HousePlan {
                         kinds[i] = 'T';
                         table = true;
                     } else {
-                        kinds[i] = 'X';
+                        // (a foundation sunk in the ground: the rock or earth that's there does as well)
+                        kinds[i] = design.buried() && i / (s.width() * s.length()) < design.groundLayer() ? 'g' : 'X';
                     }
                 }
                 default -> {

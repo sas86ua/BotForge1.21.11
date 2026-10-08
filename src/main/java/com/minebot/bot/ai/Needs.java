@@ -165,6 +165,8 @@ public final class Needs {
             bot.setArmorCheck(bot.level().getGameTime() + 20 * 60 * 5, null); // next look in 5 minutes
             return new ArmorTask(bot, piece != null ? piece : Target.of(Items.LEATHER_HELMET, 0)); // (all it has the material for)
         }),
+        // Its furnaces at home: what's done taken out, and a store of fuel kept in each
+        new Need("furnace care", FuelFurnacesTask::wanted, FuelFurnacesTask::new),
         // Armour all diamond and diamonds to spare: diamond tools, pickaxe first
         new Need("diamond tools", DiamondTools::wanted, DiamondTools::task),
         // The last 10 days before that: stocks up for it a little at a time, in the chests

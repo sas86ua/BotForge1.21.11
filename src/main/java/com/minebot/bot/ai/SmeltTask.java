@@ -258,7 +258,9 @@ public class SmeltTask extends Task {
         // All of it in, and minutes to go: no need to stand there (see GreatBuildPrepTask)
         int ticksLeft = longest * option.cookingTime();
         if (bot.leaveWhileSmelting() && stillNeeded - (entity.getItem(SLOT_INPUT).getCount() - mainInput) <= 0
-            && ticksLeft > LEAVE_AFTER && (lit || entity.getItem(SLOT_FUEL).getCount() > 0)) {
+            && ticksLeft > LEAVE_AFTER && (lit || entity.getItem(SLOT_FUEL).getCount() > 0)
+            && fuelled(entity) && spares.stream().allMatch(this::fuelled)) {
+            // (only with fuel in for all of it: Bedrock left 24 stone to cook on a few coal, and the furnace went cold)
             bot.setLeftCooking(ticksLeft);
         }
         if (progressed || lit) {
@@ -290,11 +292,24 @@ public class SmeltTask extends Task {
             }
             return result;
         }
-        if (!main.equals(bot.memory().furnace())) {
+        BlockPos home = bot.memory().furnace();
+        boolean own = main.equals(home) || otherFurnaces(bot).contains(main);
+        if (!own) {
             return List.of();
         }
-        // (only those close by: a furnace in a house 200 blocks from the workshop isn't worth the walk)
-        return spares().stream().filter(entity -> entity.getBlockPos().closerThan(main, SPARE_DISTANCE)).toList();
+        // Its other furnaces, whichever of them this batch went into first (its main one busy, Bedrock put a whole
+        // stack in the second while the first stood empty); only those close by: one 200 blocks off isn't worth the walk
+        List<AbstractFurnaceBlockEntity> result = new java.util.ArrayList<>();
+        for (AbstractFurnaceBlockEntity entity : spares()) {
+            if (!entity.getBlockPos().equals(main) && entity.getBlockPos().closerThan(main, SPARE_DISTANCE)) {
+                result.add(entity);
+            }
+        }
+        if (home != null && !home.equals(main) && home.closerThan(main, SPARE_DISTANCE)
+            && bot.level().getBlockEntity(home) instanceof AbstractFurnaceBlockEntity entity && isFree(entity)) {
+            result.add(entity);
+        }
+        return result;
     }
 
     private boolean locateFurnace() {
@@ -511,27 +526,55 @@ public class SmeltTask extends Task {
         return amount > 0;
     }
 
+    /** Fuel in this furnace for all that's in it to cook (the one burning now counted as one item's worth). */
+    private boolean fuelled(AbstractFurnaceBlockEntity furnace) {
+        ItemStack input = furnace.getItem(SLOT_INPUT);
+        if (input.isEmpty()) {
+            return true;
+        }
+        ItemStack fuel = furnace.getItem(SLOT_FUEL);
+        int ticks = fuel.isEmpty() ? 0 : bot.level().fuelValues().burnDuration(fuel) * fuel.getCount();
+        if (furnace.getBlockState().getOptionalValue(AbstractFurnaceBlock.LIT).orElse(false)) {
+            ticks += option.cookingTime();
+        }
+        return ticks >= input.getCount() * option.cookingTime();
+    }
+
     private boolean loadFuel(AbstractFurnaceBlockEntity entity) {
         ItemStack slot = entity.getItem(SLOT_FUEL);
-        if (!slot.isEmpty() || entity.getItem(SLOT_INPUT).isEmpty()) {
-            return false;
-        }
         int from = Fuel.pick(bot, keep);
         if (from < 0) {
             return false;
         }
         ItemStack stack = bot.getInventory().getItem(from);
+        if (!slot.isEmpty() && !ItemStack.isSameItemSameComponents(slot, stack)) {
+            return false;
+        }
         int burnPerItem = Math.max(1, bot.level().fuelValues().burnDuration(stack));
         int itemsToCook = entity.getItem(SLOT_INPUT).getCount();
-        int amount = Math.min(stack.getCount(), Math.max(1, (itemsToCook * option.cookingTime() + burnPerItem - 1) / burnPerItem));
-        entity.setItem(SLOT_FUEL, stack.split(amount));
+        int needed = (itemsToCook * option.cookingTime() + burnPerItem - 1) / burnPerItem;
+        // Its own furnace keeps a store of fuel in it besides, whatever burns (never left to go cold mid-batch);
+        // of coal and wood it keeps some in the bag (torches, crafting)
+        int reserve = foreign ? 0 : (FuelFurnacesTask.RESERVE_TICKS + burnPerItem - 1) / burnPerItem;
+        int want = Math.max(needed, reserve) - slot.getCount();
+        int spare = needed <= slot.getCount() ? FuelFurnacesTask.spareFuel(bot, stack) : stack.getCount();
+        int amount = Math.min(Math.min(want, stack.getCount()), Math.min(spare, slot.getMaxStackSize() - slot.getCount()));
+        if (amount <= 0 || slot.isEmpty() && itemsToCook == 0 && reserve == 0) {
+            return false;
+        }
+        if (slot.isEmpty()) {
+            entity.setItem(SLOT_FUEL, stack.split(amount));
+        } else {
+            slot.grow(stack.split(amount).getCount());
+        }
+        entity.setChanged();
         return true;
     }
 
     private Status finish(AbstractFurnaceBlockEntity entity) {
-        // Leftover fuel comes back with us
+        // Leftover fuel stays in its own furnaces (a store, ready for next time); out of one it put down to take away again, back
         ItemStack leftoverFuel = entity.getItem(SLOT_FUEL);
-        if (!leftoverFuel.isEmpty() && !foreign) {
+        if (!leftoverFuel.isEmpty() && !foreign && placedFurnace) {
             entity.setItem(SLOT_FUEL, ItemStack.EMPTY);
             Inv.give(bot, leftoverFuel);
         }

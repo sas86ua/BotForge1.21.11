@@ -25,14 +25,15 @@ public final class HouseSchematics {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     /** One house design: its plan, the layer that's level with the ground round it, and its front. */
-    public record Design(String name, Schematic schematic, int groundLayer, Direction front) {
+    /** @param buried the layers below {@code groundLayer} are a foundation sunk in the ground: any solid ground will do there */
+    public record Design(String name, Schematic schematic, int groundLayer, Direction front, boolean buried) {
     }
 
     private static final String[][] FILES = {
         {"village house", "village_house.schematic"},
         {"village base", "village_base.schematic"},
         {"basic house", "basic_house.schematic"},
-        {"simple base", "simple_base.schematic"},
+        {"simple base", "simple_base.schematic", "2"}, // (its stilts sunk in the ground: the floor level with the land)
         {"wooden cabin", "wooden_cabin.schem"}};
 
     private static List<Design> designs;
@@ -58,7 +59,9 @@ public final class HouseSchematics {
                         continue;
                     }
                     Schematic schematic = Schematic.load(in);
-                    loaded.add(new Design(file[0], schematic, groundLayer(schematic), front(schematic)));
+                    boolean buried = file.length > 2;
+                    int ground = buried ? Integer.parseInt(file[2]) : groundLayer(schematic);
+                    loaded.add(new Design(file[0], schematic, ground, front(schematic), buried));
                 } catch (Exception e) {
                     LOGGER.warn("Can't read house schematic {}", file[1], e);
                 }
