@@ -652,7 +652,23 @@ public class BotPlayer extends ServerPlayer {
             stillStatuses = 0;
         }
         lastStatusPos = position();
+        // Going round in one place (swimming to and fro in a flooded cave, say): moving, yet getting nowhere
+        if (areaAnchor == null || areaAnchor.distanceTo(position()) > AREA_RADIUS) {
+            areaAnchor = position();
+            areaStatuses = 0;
+        } else {
+            areaStatuses++;
+        }
     }
+
+    /** How long it has been within a few blocks of where it was (moving or not). */
+    public int areaSeconds() {
+        return areaStatuses * STATUS_INTERVAL / 20;
+    }
+
+    private static final double AREA_RADIUS = 12;
+    private @Nullable net.minecraft.world.phys.Vec3 areaAnchor;
+    private int areaStatuses;
 
     /** The server simulates the bot's movement, so it owns ground checks and fall damage. */
     @Override

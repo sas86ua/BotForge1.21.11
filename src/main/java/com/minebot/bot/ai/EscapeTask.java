@@ -44,7 +44,12 @@ public class EscapeTask extends Task {
         }
         boolean drowning = bot.isUnderWater() && bot.getAirSupply() < bot.getMaxAirSupply() / 2;
         // (paths failing now and then is normal down a mine: stuck means going nowhere for a minute too)
-        return drowning || bot.recentNavFailures(20 * 60) >= 3 && bot.stillSeconds() >= 60;
+        // (or on its way somewhere far, yet still in the same few blocks after minutes: Bedrock swam to and fro in a
+        // flooded cave for 20 hours, its ways never "failing", just never getting it out)
+        BlockPos feet = bot.navigator().feet();
+        var goal = bot.navigator().goal();
+        boolean goingNowhere = bot.areaSeconds() >= 180 && goal != null && goal.distance(feet.getX(), feet.getY(), feet.getZ()) > 16;
+        return drowning || bot.recentNavFailures(20 * 60) >= 3 && bot.stillSeconds() >= 60 || goingNowhere;
     }
 
     public static boolean underground(BotPlayer bot) {
