@@ -751,6 +751,9 @@ public class GreatBuildTask extends Task {
             } else {
                 bot.setJumping(false);
             }
+            if (jobTicks > 1) {
+                jobTicks++; // (hopping on the spot counts against the job's time all the same)
+            }
             return Status.RUNNING;
         }
         if (bot.onGround()) {

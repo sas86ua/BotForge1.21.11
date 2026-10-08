@@ -88,6 +88,7 @@ public class Navigator {
     private double lastPartialDistance;
     private double bestGoalDistance;
     private int airTicks;
+    private int hopTicks;
     /** Steps that keep failing, by target position; after a few tries the spot is avoided. */
     private final Long2IntOpenHashMap stepFailures = new Long2IntOpenHashMap();
     private final LongOpenHashSet avoid = new LongOpenHashSet();
@@ -222,7 +223,12 @@ public class Navigator {
         if (goal == null) {
             return status;
         }
-        if (goal.isReached(feet())) {
+        // (on its feet: at the top of a hop up a step the feet are "there" already - it stopped, fell back, and was
+        // sent again, hopping on the spot for minutes)
+        boolean grounded = bot.onGround() || bot.isInWater() || bot.onClimbable() || bot.getVehicle() != null;
+        hopTicks = grounded ? 0 : hopTicks + 1;
+        boolean steady = grounded || hopTicks > 40; // (not for ever: a long fall, something odd underfoot)
+        if (steady && goal.isReached(feet())) {
             finish(Status.SUCCESS);
             return status;
         }

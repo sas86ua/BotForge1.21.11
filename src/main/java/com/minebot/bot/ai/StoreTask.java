@@ -53,6 +53,12 @@ public class StoreTask extends Task {
         if (dumped && !ChestTask.bagFull(bot)) {
             return Status.SUCCESS; // room again; the chests can wait
         }
+        if (GreatBuildTask.isAway(bot)) {
+            // At the Great Build: not all the way home for it (Bedrock set off 1800 blocks when its job there got stuck) -
+            // the junk goes, and what it dug goes in the camp chests (see GreatBuildTask)
+            dropJunk();
+            return ChestTask.bagFull(bot) ? Status.FAILURE : Status.SUCCESS; // (still full: not again at once)
+        }
         if (!Home.has(bot) || bot.memory().chests().isEmpty()) {
             dropJunk();
             return Status.SUCCESS;
