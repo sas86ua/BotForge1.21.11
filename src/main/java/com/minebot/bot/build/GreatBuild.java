@@ -89,7 +89,8 @@ public final class GreatBuild extends SavedData {
         Codec.INT.listOf().optionalFieldOf("chunk_done", List.of()).forGetter(b -> b.chunkDone),
         Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC.listOf()).optionalFieldOf("camp", Map.of()).forGetter(b -> b.camp),
         UUIDUtil.STRING_CODEC.listOf().optionalFieldOf("sent_early", List.of()).forGetter(b -> List.copyOf(b.sentEarly)),
-        Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC).optionalFieldOf("camp_chest", Map.of()).forGetter(b -> b.campChest)
+        Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC).optionalFieldOf("camp_chest", Map.of()).forGetter(b -> b.campChest),
+        Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.STRING.listOf()).optionalFieldOf("cant_get", Map.of()).forGetter(b -> b.cantGet)
     ).apply(i, GreatBuild::new));
     private static final SavedDataType<GreatBuild> TYPE =
         new SavedDataType<>("minebot_great_build", GreatBuild::new, CODEC, null);
@@ -118,6 +119,8 @@ public final class GreatBuild extends SavedData {
     private final Set<UUID> sentEarly = new HashSet<>();
     /** Each bot's chest at its camp (anyone at the site may use it). */
     private final Map<UUID, BlockPos> campChest;
+    /** What each bot couldn't get getting ready (no flowers, no sheep round its home...): ordered from others. */
+    private final Map<UUID, List<String>> cantGet;
 
     // ---- not saved ------------------------------------------------------------------------------
     private @Nullable Schematic plan;
@@ -142,12 +145,12 @@ public final class GreatBuild extends SavedData {
     private final Map<Item, Integer> materialTotals = new LinkedHashMap<>();
 
     public GreatBuild() {
-        this("", BlockPos.ZERO, -1, -1, 0, Map.of(), Map.of(), 0, 0, List.of(), Map.of(), List.of(), Map.of());
+        this("", BlockPos.ZERO, -1, -1, 0, Map.of(), Map.of(), 0, 0, List.of(), Map.of(), List.of(), Map.of(), Map.of());
     }
 
     private GreatBuild(String file, BlockPos centre, long nextDay, long sessionEnd, int sessions,
                        Map<UUID, Map<String, Integer>> orders, Map<String, Integer> failures, long placed, long dug,
-                       List<Integer> chunkDone, Map<UUID, List<BlockPos>> camp, List<UUID> sentEarly, Map<UUID, BlockPos> campChest) {
+                       List<Integer> chunkDone, Map<UUID, List<BlockPos>> camp, List<UUID> sentEarly, Map<UUID, BlockPos> campChest, Map<UUID, List<String>> cantGet) {
         this.file = file;
         this.centre = centre;
         this.nextDay = nextDay;
@@ -163,6 +166,8 @@ public final class GreatBuild extends SavedData {
         camp.forEach((uuid, list) -> this.camp.put(uuid, new ArrayList<>(list)));
         this.sentEarly.addAll(sentEarly);
         this.campChest = new HashMap<>(campChest);
+        this.cantGet = new HashMap<>();
+        cantGet.forEach((uuid, items) -> this.cantGet.put(uuid, new ArrayList<>(items)));
     }
 
     public static GreatBuild get(MinecraftServer server) {
@@ -254,6 +259,7 @@ public final class GreatBuild extends SavedData {
         camp.clear(); // (a new site: new camps)
         campChest.clear();
         failures.clear();
+        cantGet.clear();
         placed = 0;
         dug = 0;
         sessions = 0;
@@ -1004,15 +1010,18 @@ public final class GreatBuild extends SavedData {
         for (Map.Entry<Item, Integer> entry : items) {
             int left = entry.getValue();
             int stackSize = new ItemStack(entry.getKey()).getMaxStackSize();
+            String itemKey = key(entry.getKey());
             for (int tries = 0; left > 0 && tries < bots.size() * 2; tries++) {
                 int i = bot % bots.size();
-                if (capacity[i] > 0) {
+                // (not from a bot that couldn't get it before: the next one gets it)
+                boolean cant = cantGet.getOrDefault(bots.get(i).uuid(), List.of()).contains(itemKey);
+                if (capacity[i] > 0 && !cant) {
                     int take = Math.min(left, capacity[i] * stackSize);
                     orders.computeIfAbsent(bots.get(i).uuid(), u -> new LinkedHashMap<>()).merge(key(entry.getKey()), take, Integer::sum);
                     capacity[i] -= (take + stackSize - 1) / stackSize;
                     left -= take;
                 }
-                if (left > 0 || capacity[i] <= 0) {
+                if (left > 0 || capacity[i] <= 0 || cant) {
                     bot++;
                 }
             }
@@ -1042,8 +1051,54 @@ public final class GreatBuild extends SavedData {
         setDirty();
     }
 
+    /**
+     * This bot couldn't get {@code item} for its order (no flowers or sheep round its home, say): what it
+     * still lacks of it goes to another bot on the server that hasn't failed at it (the one with the least
+     * to bring), and it isn't ordered this from now on. With nobody to take it, it's dropped (an admin brings it).
+     */
+    public void failedBy(BotPlayer bot, Item item, int missing) {
+        failed(item);
+        String key = key(item);
+        List<String> cant = cantGet.computeIfAbsent(bot.getUUID(), u -> new ArrayList<>());
+        if (!cant.contains(key)) {
+            cant.add(key);
+        }
+        Map<String, Integer> own = orders.get(bot.getUUID());
+        if (own == null || !own.containsKey(key) || missing <= 0) {
+            setDirty();
+            return;
+        }
+        int kept = own.get(key) - missing; // (what it got ready of it stays its to bring)
+        if (kept > 0) {
+            own.put(key, kept);
+        } else {
+            own.remove(key);
+        }
+        BotPlayer taker = null;
+        int least = Integer.MAX_VALUE;
+        for (BotPlayer other : com.minebot.bot.BotManager.all()) {
+            if (other == bot || !other.memory().autonomous() || cantGet.getOrDefault(other.getUUID(), List.of()).contains(key)) {
+                continue;
+            }
+            int load = orders.getOrDefault(other.getUUID(), Map.of()).values().stream().mapToInt(Integer::intValue).sum();
+            if (load < least) {
+                least = load;
+                taker = other;
+            }
+        }
+        if (taker != null) {
+            orders.computeIfAbsent(taker.getUUID(), u -> new LinkedHashMap<>()).merge(key, missing, Integer::sum);
+            LOGGER.info("Great build: {} can't get {}; {} of it ordered from {} instead", bot.getPlainTextName(), key, missing,
+                taker.getPlainTextName());
+        } else {
+            LOGGER.info("Great build: {} can't get {}, and nobody else is left to ask", bot.getPlainTextName(), key);
+        }
+        setDirty();
+    }
+
     public void clearFailures() {
         failures.clear();
+        cantGet.clear(); // (each bot may try again)
         setDirty();
     }
 

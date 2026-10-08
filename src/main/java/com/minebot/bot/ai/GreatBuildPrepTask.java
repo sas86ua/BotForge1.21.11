@@ -145,7 +145,9 @@ public class GreatBuildPrepTask extends Task {
         if (status == Status.FAILURE) {
             bot.debug("great build: can't get {} for now", GreatBuild.key(item));
             FAILED.computeIfAbsent(bot.getUUID(), u -> new HashMap<>()).put(item, bot.level().getGameTime() + RETRY_TICKS);
-            GreatBuild.get(bot.level().getServer()).failed(item);
+            // (its order of it goes to another bot, one with flowers or sheep about, say)
+            GreatBuild build = GreatBuild.get(bot.level().getServer());
+            build.failedBy(bot, item, build.orderOf(bot.getUUID()).getOrDefault(item, 0) - have(bot, item));
         }
         return status;
     }
