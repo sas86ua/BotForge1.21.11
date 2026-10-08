@@ -72,6 +72,17 @@ public final class Home {
         }
     }
 
+    /**
+     * Its house is lost: it's built again, like the first one, 20-30 days after it has a home again (a hut,
+     * a bed somewhere) - the clock starts over then.
+     */
+    private static void houseLost(BotPlayer bot) {
+        BotMemory memory = bot.memory();
+        memory.setHouseDone(false);
+        memory.setHouseSite(null, net.minecraft.core.Direction.NORTH, 0);
+        memory.setHomeSince(-1);
+    }
+
     /** Moved into a house of its own: what it used in someone else's is left there, not its any more. */
     public static void returnBorrowed(BotPlayer bot) {
         BotMemory memory = bot.memory();
@@ -175,8 +186,15 @@ public final class Home {
             } else {
                 bot.debug("my bed at {} is gone; looking for a new home", bed.toShortString());
                 memory.setHome(null, false);
+                houseLost(bot);
                 return;
             }
+        }
+        if (bed != null && memory.houseDone() && level.isLoaded(bed) && level.canSeeSky(bed.above())) {
+            // The house round the bed is gone (burnt, blown up, pulled down): a shelter round the bed for now,
+            // and a proper house again in time, as the first time
+            bot.debug("my house round the bed at {} is gone; I'll build one again", bed.toShortString());
+            houseLost(bot);
         }
         for (BlockPos chest : List.copyOf(memory.chests())) {
             if (level.isLoaded(chest) && !(level.getBlockState(chest).getBlock() instanceof ChestBlock)) {
