@@ -16,6 +16,9 @@ import org.jetbrains.annotations.Nullable;
 public class BlockBreaker {
     /** Give up on blocks that would take longer than this (e.g. obsidian by hand). */
     private static final int MAX_TICKS = 20 * 20;
+    /** How long it waits to land before digging all the same (a long fall, standing on something odd). */
+    private static final int AIR_TICKS = 20;
+    private int airTicks;
 
     private final BotPlayer bot;
     private @Nullable BlockPos target;
@@ -68,6 +71,15 @@ public class BlockBreaker {
             cancel();
             return Result.SUCCESS;
         }
+        if (!bot.isInWater() && !bot.onClimbable()) {
+            // No hopping about while digging: in the air a block breaks five times slower, and at the top of a hop it's
+            // out of reach - feet on the ground first (in the water it keeps afloat, as the task wants)
+            bot.setJumping(false);
+            if (!bot.onGround() && airTicks++ < AIR_TICKS) {
+                return Result.RUNNING;
+            }
+        }
+        airTicks = 0;
         if (!bot.isWithinBlockInteractionRange(target, 0.5)) {
             cancel();
             return Result.FAILED;
