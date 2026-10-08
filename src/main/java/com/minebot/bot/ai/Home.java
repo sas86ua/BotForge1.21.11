@@ -66,6 +66,67 @@ public final class Home {
                 }
             }
         }
+        if (!memory.houseDone() && memory.bed() != null && level.isLoaded(memory.bed())
+            && (memory.furnace() == null || memory.craftingTable() == null || memory.chests().isEmpty())) {
+            adoptNearby(bot, level, memory.bed());
+        }
+    }
+
+    /** How far from its bed (not a house of its own: a village's, say) it takes what stands about as its own. */
+    private static final int NEARBY_RADIUS = 12;
+
+    /**
+     * Living in someone else's house (a village's): the furnace, crafting table and chests nearby, in that
+     * house or the next (a smithy), are its to use, nearest first, if no other bot uses them. What's
+     * still missing after that goes in a yard by the house (see FurnishTask).
+     */
+    private static void adoptNearby(BotPlayer bot, ServerLevel level, BlockPos bed) {
+        BotMemory memory = bot.memory();
+        java.util.Set<BlockPos> taken = new java.util.HashSet<>();
+        for (BotPlayer other : com.minebot.bot.BotManager.all()) {
+            if (other != bot) {
+                taken.addAll(other.memory().chests());
+                if (other.memory().furnace() != null) {
+                    taken.add(other.memory().furnace());
+                }
+                if (other.memory().craftingTable() != null) {
+                    taken.add(other.memory().craftingTable());
+                }
+            }
+        }
+        BlockPos furnace = null;
+        BlockPos table = null;
+        BlockPos chest = null;
+        for (BlockPos pos : BlockPos.betweenClosed(bed.offset(-NEARBY_RADIUS, -4, -NEARBY_RADIUS), bed.offset(NEARBY_RADIUS, 4, NEARBY_RADIUS))) {
+            net.minecraft.world.level.block.state.BlockState state = level.getBlockState(pos);
+            boolean isFurnace = state.is(net.minecraft.world.level.block.Blocks.FURNACE);
+            boolean isTable = state.is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE);
+            boolean isChest = state.getBlock() instanceof net.minecraft.world.level.block.ChestBlock
+                || state.getBlock() instanceof net.minecraft.world.level.block.BarrelBlock;
+            if (!isFurnace && !isTable && !isChest || taken.contains(pos) || com.minebot.bot.world.ProtectedAreas.isProtected(level, pos)) {
+                continue;
+            }
+            double distance = pos.distSqr(bed);
+            if (isFurnace && memory.furnace() == null && (furnace == null || distance < furnace.distSqr(bed))) {
+                furnace = pos.immutable();
+            } else if (isTable && memory.craftingTable() == null && (table == null || distance < table.distSqr(bed))) {
+                table = pos.immutable();
+            } else if (isChest && memory.chests().isEmpty() && (chest == null || distance < chest.distSqr(bed))) {
+                chest = pos.immutable();
+            }
+        }
+        if (furnace != null) {
+            memory.setFurnace(furnace);
+            bot.debug("the furnace at {} near my bed is mine to use now", furnace.toShortString());
+        }
+        if (table != null) {
+            memory.setCraftingTable(table);
+            bot.debug("the crafting table at {} near my bed is mine to use now", table.toShortString());
+        }
+        if (chest != null) {
+            memory.addChest(chest);
+            bot.debug("the chest at {} near my bed is mine to use now", chest.toShortString());
+        }
     }
 
     public static void validate(BotPlayer bot) {

@@ -246,6 +246,15 @@ public class FurnishTask extends Task {
                 spot = findWorkshopSpot(level, workshop, item); // (no room by the bed: in the workshop, or the yard)
             }
             if (spot == null && workshop == null && !bot.memory().houseDone() && bot.memory().bed() != null) {
+                // What the village has nearby first (a furnace in the smithy, a table, a chest): its to use
+                Home.adoptStorage(bot);
+                BotMemory memory = bot.memory();
+                if (item == Items.FURNACE && !spare && memory.furnace() != null || item == Items.CRAFTING_TABLE && memory.craftingTable() != null
+                    || item == Items.CHEST && !memory.chests().isEmpty()) {
+                    return Status.SUCCESS;
+                }
+            }
+            if (spot == null && workshop == null && !bot.memory().houseDone() && bot.memory().bed() != null) {
                 // A bed in someone else's house (a village's) with no room in it for its things: a yard of its own
                 // out by it, as its workshop, till it builds a house (Obsidian went a day without chest or furnace)
                 BlockPos yard = yardSpot(level, bot.memory().bed());
