@@ -165,6 +165,8 @@ public final class Needs {
             bot.setArmorCheck(bot.level().getGameTime() + 20 * 60 * 5, null); // next look in 5 minutes
             return new ArmorTask(bot, piece != null ? piece : Target.of(Items.LEATHER_HELMET, 0)); // (all it has the material for)
         }),
+        // Armour all diamond and diamonds to spare: diamond tools, pickaxe first
+        new Need("diamond tools", DiamondTools::wanted, DiamondTools::task),
         // The last 10 days before that: stocks up for it a little at a time, in the chests
         new Need("house prep", HousePrepTask::wanted, HousePrepTask::new),
         // After 20-30 days in the first hut: a proper house next to it

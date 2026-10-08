@@ -82,10 +82,12 @@ public final class Tools {
                 }
             }
         }
-        return worn >= 0 && sound < worn;
+        // (a diamond one with no diamonds to make another: an iron one will do to follow it)
+        int wanted = worn >= 3 && !diamondsFor(bot, kind) ? 2 : worn;
+        return worn >= 0 && sound < wanted;
     }
 
-    /** A new one for the worn tool of this kind, of its tier. */
+    /** A new one for the worn tool of this kind, of its tier (diamond if it was, and there are the diamonds). */
     public static Target replacement(BotPlayer bot, TagKey<Item> kind) {
         int worn = 0;
         for (int slot = 0; slot < Inv.MAIN_SIZE; slot++) {
@@ -94,7 +96,17 @@ public final class Tools {
                 worn = Math.max(worn, rank(stack.getItem()));
             }
         }
+        if (worn >= 3 && diamondsFor(bot, kind)) {
+            return new Target("diamond " + kind.location().getPath(), stack -> stack.is(kind) && rank(stack.getItem()) >= 3, 1);
+        }
         return target(kind, tierOf(worn));
+    }
+
+    /** Diamonds enough (bag and chests) for a diamond tool of this kind. */
+    private static boolean diamondsFor(BotPlayer bot, TagKey<Item> kind) {
+        int needed = kind == ItemTags.SWORDS ? 2 : kind == ItemTags.SHOVELS ? 1 : 3;
+        return Inv.count(bot, stack -> stack.is(net.minecraft.world.item.Items.DIAMOND))
+            + ChestTask.stored(bot, Target.of(net.minecraft.world.item.Items.DIAMOND, 1)) >= needed;
     }
 
     public static boolean has(BotPlayer bot, TagKey<Item> kind, Tier tier) {
