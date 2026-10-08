@@ -97,9 +97,11 @@ public final class Tools {
             }
         }
         if (worn >= 3 && diamondsFor(bot, kind)) {
-            return new Target("diamond " + kind.location().getPath(), stack -> stack.is(kind) && rank(stack.getItem()) >= 3, 1);
+            return new Target("diamond " + kind.location().getPath(), stack -> stack.is(kind) && rank(stack.getItem()) >= 3 && !isWorn(stack), 1);
         }
-        return target(kind, tierOf(worn));
+        // (a sound one: the worn one itself is no replacement - it counted as one, and "new axe" was done at once, over and over)
+        Target same = target(kind, tierOf(worn));
+        return new Target(same.name(), same.accepts().and(stack -> !isWorn(stack)), 1);
     }
 
     /** Diamonds enough (bag and chests) for a diamond tool of this kind. */

@@ -254,7 +254,7 @@ public class FurnishTask extends Task {
                     return Status.SUCCESS;
                 }
             }
-            if (spot == null && workshop == null && !bot.memory().builtHome() && !bot.memory().houseDone() && bot.memory().bed() != null) {
+            if (spot == null && workshop == null && bot.memory().bed() != null) { // (any house too small: Lapis had no room for a third chest)
                 // A bed in someone else's house (a village's) with no room in it for its things: a yard of its own
                 // out by it, as its workshop, till it builds a house (Obsidian went a day without chest or furnace)
                 BlockPos yard = yardSpot(level, bot.memory().bed());
