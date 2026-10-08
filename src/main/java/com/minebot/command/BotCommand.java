@@ -226,6 +226,7 @@ public final class BotCommand {
                 com.minebot.stats.ServerStats.post(ctx.getSource().getServer()); // (the hourly summary, now)
                 return 1;
             }))
+            .then(Commands.literal("house").then(Commands.literal("designs").executes(BotCommand::houseDesigns)))
             .then(Commands.literal("spawnpoint")
                 .then(Commands.literal("add")
                     .executes(ctx -> addSpawnPoint(ctx, BlockPos.containing(ctx.getSource().getPosition())))
@@ -236,6 +237,33 @@ public final class BotCommand {
                         .executes(BotCommand::removeSpawnPoint)))
                 .then(Commands.literal("list")
                     .executes(BotCommand::listSpawnPoints))));
+    }
+
+    /** The schematic houses the bots build: size, ground, front, bed and table, and what they take. */
+    private static int houseDesigns(CommandContext<CommandSourceStack> ctx) {
+        var designs = com.minebot.bot.build.HouseSchematics.all();
+        StringBuilder text = new StringBuilder(designs.size() + " house designs:");
+        for (int i = 0; i < designs.size(); i++) {
+            var design = designs.get(i);
+            var plan = com.minebot.bot.build.HousePlans.create(com.minebot.bot.build.HousePlans.SCHEMATIC_BASE + i, BlockPos.ZERO,
+                net.minecraft.core.Direction.NORTH);
+            java.util.Map<String, Integer> kinds = new java.util.TreeMap<>();
+            java.util.Map<String, Integer> items = new java.util.HashMap<>();
+            for (var cell : plan.cells()) {
+                kinds.merge(String.valueOf(cell.kind()), 1, Integer::sum);
+                if (cell.state() != null && cell.kind() == 'X') {
+                    items.merge(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(cell.state().getBlock().asItem()).getPath(), 1, Integer::sum);
+                }
+            }
+            var s = design.schematic();
+            text.append("\n ").append(design.name()).append(": ").append(s.width()).append("x").append(s.height()).append("x").append(s.length())
+                .append(", ground layer ").append(design.groundLayer()).append(", front ").append(design.front())
+                .append(", cells ").append(kinds);
+            items.entrySet().stream().sorted(java.util.Map.Entry.<String, Integer>comparingByValue().reversed())
+                .forEach(e -> text.append(" ").append(e.getKey()).append(" ").append(e.getValue()).append(","));
+        }
+        reply(ctx, text.toString());
+        return designs.size();
     }
 
     private static int info(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

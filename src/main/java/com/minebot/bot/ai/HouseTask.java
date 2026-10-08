@@ -7,7 +7,10 @@ import com.minebot.bot.action.BlockBreaker;
 import com.minebot.bot.action.BlockPlacer;
 import com.minebot.bot.action.Inv;
 import com.minebot.bot.build.Blueprint;
+import com.minebot.bot.build.HousePlan;
+import com.minebot.bot.build.HousePlans;
 import com.minebot.bot.build.HouseTemplates;
+import com.minebot.bot.build.Placement;
 import com.minebot.bot.craft.Target;
 import com.minebot.bot.path.Goal;
 import com.minebot.bot.world.BlockRules;
@@ -20,32 +23,41 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
- * After some weeks in its first hut, the bot builds a proper house next to it
- * (one of a few plans, see {@link HouseTemplates}): levels the ground, cuts
- * the trees there, builds it from stone and wood, then moves its bed and
- * crafting table in. The hut stays as its workshop with the chests and furnace.
+ * After some weeks in its first hut, the bot builds a proper house next to it: one of the
+ * schematic houses (see {@link com.minebot.bot.build.HouseSchematics}), picked at random, or, with
+ * no room for any of them, one of its own simple plans ({@link HouseTemplates}). It levels the
+ * ground, cuts the trees there, gets the materials a batch at a time and builds it bottom up, then
+ * moves its bed and crafting table in. The hut stays as its workshop with the chests and furnace.
+ * A bot in an old house of its own simple plan builds a schematic one in time too, and moves.
  */
 public class HouseTask extends Task {
     private static final long DAY = 24000;
-    /** The house goes this far from the hut's middle... */
+    /** The house goes this far from the hut's middle (plus half its size)... */
     private static final int MIN_DISTANCE = 8;
     private static final int MAX_DISTANCE = 26;
     /** ...and keeps this much space from the hut's walls. */
@@ -53,17 +65,27 @@ public class HouseTask extends Task {
     /** Uneven ground: dig or fill at most this much at any spot. */
     private static final int MAX_LEVELLING = 3;
     private static final int TICKS_PER_BLOCK = 20 * 20;
+    /** A batch of materials: at most this many stacks of them at a time (a big house doesn't fit in the bag). */
+    private static final int BATCH_STACKS = 10;
+    /** What it couldn't get for its house is left out for a day (then tried again). */
+    private static final long UNOBTAINABLE_TICKS = DAY;
+    private static final Map<UUID, Map<Item, Long>> UNOBTAINABLE = new ConcurrentHashMap<>();
 
     private enum Stage { SITE, MATERIALS, CLEAR, FILL, BUILD, MOVE_BED, MOVE_TABLE, DONE }
 
     private Stage stage = Stage.SITE;
-    private @Nullable Blueprint plan;
+    private @Nullable HousePlan plan;
     private @Nullable Task child;
     private final BlockBreaker breaker;
     private final Set<BlockPos> skipped = new HashSet<>();
     private @Nullable BlockPos working;
     private int workingTicks;
     private boolean pillarLogging;
+    /** The schematic houses still to try for a site, one a tick (in random order). */
+    private @Nullable List<Integer> designQueue;
+    /** What the materials child is getting (left out if it can't be had). */
+    private @Nullable Item getting;
+    private @Nullable Map<BlockPos, Blueprint.Cell> cellAt;
 
     public HouseTask(BotPlayer bot) {
         super(bot);
@@ -111,12 +133,31 @@ public class HouseTask extends Task {
         if (movingIn(bot)) {
             return true; // (finish moving in, home or no home)
         }
-        if (!Home.has(bot) || memory.houseDone() || memory.homeSince() < 0 || Home.levelIfHere(bot) == null
-            || Home.isNight(bot)) {
+        if (!Home.has(bot) || memory.homeSince() < 0 || Home.levelIfHere(bot) == null || Home.isNight(bot)) {
             return false;
         }
-        return bot.level().getGameTime() >= startTime(memory)
-            && Tools.has(bot, ItemTags.PICKAXES, Tools.Tier.STONE) && Tools.has(bot, ItemTags.AXES, Tools.Tier.STONE);
+        boolean tools = Tools.has(bot, ItemTags.PICKAXES, Tools.Tier.STONE) && Tools.has(bot, ItemTags.AXES, Tools.Tier.STONE);
+        if (memory.houseDone()) {
+            return tools && rebuildDue(bot);
+        }
+        return bot.level().getGameTime() >= startTime(memory) && tools;
+    }
+
+    /**
+     * Living in an old house of its own simple plan: a schematic house in its place in time (a few days
+     * to three weeks on, each bot its own moment; set the first time this is asked).
+     */
+    private static boolean rebuildDue(BotPlayer bot) {
+        BotMemory memory = bot.memory();
+        if (memory.houseOrigin() == null || HousePlans.isSchematic(memory.houseTemplate()) || HousePlans.designs() == 0) {
+            return false;
+        }
+        long now = bot.level().getGameTime();
+        if (memory.rebuildAt() < 0) {
+            memory.setRebuildAt(now + DAY * (3 + Math.floorMod(memory.uuid().hashCode() >> 4, 21)));
+            return false;
+        }
+        return now >= memory.rebuildAt();
     }
 
     @Override
@@ -130,6 +171,14 @@ public class HouseTask extends Task {
             Task finished = child;
             child = null;
             if (status == Status.FAILURE && stage == Stage.MATERIALS) {
+                if (plan != null && plan.fromSchematic() && getting != null) {
+                    // (one thing it can't get - a dye, deepslate...: those blocks are left out for now, the rest goes on)
+                    bot.debug("house: can't get {}; leaving those blocks out for now", getting);
+                    UNOBTAINABLE.computeIfAbsent(bot.getUUID(), u -> new ConcurrentHashMap<>())
+                        .put(getting, bot.level().getGameTime() + UNOBTAINABLE_TICKS);
+                    getting = null;
+                    return Status.RUNNING;
+                }
                 bot.debug("house: couldn't get the materials");
                 return Status.FAILURE;
             }
@@ -144,9 +193,9 @@ public class HouseTask extends Task {
         }
         return switch (stage) {
             case SITE -> chooseSite();
-            case MATERIALS -> gatherMaterials();
-            case CLEAR -> clear();
-            case FILL -> fill();
+            case MATERIALS -> plan.fromSchematic() ? gatherBatch() : gatherMaterials();
+            case CLEAR -> plan.fromSchematic() ? clearSchematic() : clear();
+            case FILL -> plan.fromSchematic() ? fillSchematic() : fill();
             case BUILD -> build();
             case MOVE_BED -> moveBed();
             case MOVE_TABLE -> moveTable();
@@ -158,36 +207,57 @@ public class HouseTask extends Task {
 
     private Status chooseSite() {
         BotMemory memory = bot.memory();
+        if (memory.houseDone()) {
+            // Time for a new house in place of the old one of its simple plan: planned afresh (the old one stays)
+            bot.debug("house: time for a new house");
+            memory.setHouseDone(false);
+            memory.setHouseSite(null, Direction.NORTH, 0);
+        }
         BlockPos saved = memory.houseOrigin();
         if (saved != null && !isOurArea(bot, saved)) {
             // Planned (or built) back where it lived before: it has moved since (died far away and
             // started over elsewhere). A new house goes up by the home it has now
             bot.debug("house: the one at {} is far from home now; planning a new one here", saved.toShortString());
-            memory.setHouseSite(null, net.minecraft.core.Direction.NORTH, 0);
+            memory.setHouseSite(null, Direction.NORTH, 0);
             memory.setHouseDone(false);
             memory.setWorkshop(null); // (the old hut, back there too)
             saved = null;
         }
         if (saved != null) {
-            plan = new Blueprint(HouseTemplates.ALL.get(Math.floorMod(memory.houseTemplate(), HouseTemplates.ALL.size())),
-                saved, memory.houseFront());
-            bot.debug("house: carrying on with the {} at {}", plan.template().name(), saved.toShortString());
+            plan = HousePlans.create(memory.houseTemplate(), saved, memory.houseFront());
+            bot.debug("house: carrying on with the {} at {}", plan.name(), saved.toShortString());
             stage = Stage.MATERIALS;
             return Status.RUNNING;
         }
-        int templateIndex = bot.getRandom().nextInt(HouseTemplates.ALL.size());
-        plan = findSite(HouseTemplates.ALL.get(templateIndex));
-        if (plan == null) {
-            bot.debug("house: no good spot near the hut");
-            return Status.FAILURE;
+        if (designQueue == null) {
+            designQueue = new ArrayList<>();
+            for (int i = 0; i < HousePlans.designs(); i++) {
+                designQueue.add(HousePlans.SCHEMATIC_BASE + i);
+            }
+            Collections.shuffle(designQueue, new java.util.Random(bot.getRandom().nextLong()));
         }
-        memory.setHouseSite(plan.origin(), plan.front(), templateIndex);
-        bot.debug("house: building a {} at {} facing {}", plan.template().name(), plan.origin().toShortString(), plan.front());
+        int index;
+        if (!designQueue.isEmpty()) {
+            index = designQueue.remove(0); // (one a tick: a big house is a lot of ground to look over)
+        } else {
+            index = -1;
+        }
+        if (index < 0) {
+            // No room for any of them: one of its own simple plans
+            index = bot.getRandom().nextInt(HouseTemplates.ALL.size());
+        }
+        plan = findSite(index);
+        if (plan == null) {
+            bot.debug("house: no good spot near the hut for a {}", HousePlans.create(index, BlockPos.ZERO, Direction.NORTH).name());
+            return index < HousePlans.SCHEMATIC_BASE ? Status.FAILURE : Status.RUNNING;
+        }
+        memory.setHouseSite(plan.origin(), plan.front(), index);
+        bot.debug("house: building a {} at {} facing {}", plan.name(), plan.origin().toShortString(), plan.front());
         stage = Stage.MATERIALS;
         return Status.RUNNING;
     }
 
-    private @Nullable Blueprint findSite(HouseTemplates.Template template) {
+    private @Nullable HousePlan findSite(int index) {
         ServerLevel level = bot.level();
         BlockPos bed = bot.memory().bed();
         // The hut (or whatever house the bot lives in now): everything built around the bed
@@ -201,27 +271,33 @@ public class HouseTask extends Task {
             hutMaxZ = Math.max(hutMaxZ, pos.getZ());
         }
         BlockPos hutCenter = new BlockPos((hutMinX + hutMaxX) / 2, bed.getY(), (hutMinZ + hutMaxZ) / 2);
+        HousePlan sample = HousePlans.create(index, BlockPos.ZERO, Direction.NORTH);
+        int half = Math.max(sample.sizeX(), sample.sizeZ()) / 2;
+        int maxDistance = MAX_DISTANCE + half;
+        int step = half > 6 ? 3 : 2;
         // Other buildings around (players', villages', other bots')
-        List<BlockPos> built = BlockSearch.find(level, hutCenter, MAX_DISTANCE + 14, bed.getY() - 8, bed.getY() + 16,
+        List<BlockPos> built = BlockSearch.find(level, hutCenter, maxDistance + half + 14, bed.getY() - 8, bed.getY() + 16,
             BlockRules::isBuilt, (pos, state) -> true, 4000);
 
-        Blueprint best = null;
+        HousePlan best = null;
         double bestScore = Double.MAX_VALUE;
-        for (int dx = -MAX_DISTANCE; dx <= MAX_DISTANCE; dx += 2) {
-            for (int dz = -MAX_DISTANCE; dz <= MAX_DISTANCE; dz += 2) {
+        for (int dx = -maxDistance; dx <= maxDistance; dx += step) {
+            for (int dz = -maxDistance; dz <= maxDistance; dz += step) {
                 double distance = Math.sqrt(dx * dx + dz * dz);
-                if (distance < MIN_DISTANCE || distance > MAX_DISTANCE) {
+                if (distance < MIN_DISTANCE + half || distance > maxDistance) {
                     continue;
                 }
-                // Door towards the hut
+                // Door towards the hut (dx, dz: the house's middle from the hut's)
                 Direction front = Math.abs(dx) > Math.abs(dz)
                     ? (dx > 0 ? Direction.WEST : Direction.EAST)
                     : (dz > 0 ? Direction.NORTH : Direction.SOUTH);
-                Blueprint candidate = new Blueprint(template, new BlockPos(hutCenter.getX() + dx, 0, hutCenter.getZ() + dz), front);
+                HousePlan candidate = HousePlans.create(index, BlockPos.ZERO, front);
+                candidate = HousePlans.create(index, new BlockPos(hutCenter.getX() + dx - candidate.sizeX() / 2, 0,
+                    hutCenter.getZ() + dz - candidate.sizeZ() / 2), front);
                 Double score = evaluate(level, candidate, hutMinX, hutMaxX, hutMinZ, hutMaxZ, built);
                 if (score != null && score + distance < bestScore) {
                     bestScore = score + distance;
-                    best = new Blueprint(template, candidate.origin().atY(candidateFloor), front);
+                    best = candidate.atFloor(candidateFloor);
                 }
             }
         }
@@ -232,7 +308,7 @@ public class HouseTask extends Task {
      * How much digging and filling a spot needs (null: unsuitable). Its floor
      * height is left in {@link #candidateFloor} (the candidate's own y means nothing).
      */
-    private @Nullable Double evaluate(ServerLevel level, Blueprint candidate, int hutMinX, int hutMaxX, int hutMinZ,
+    private @Nullable Double evaluate(ServerLevel level, HousePlan candidate, int hutMinX, int hutMaxX, int hutMinZ,
                                       int hutMaxZ, List<BlockPos> built) {
         BlockPos o = candidate.origin();
         int sx = candidate.sizeX();
@@ -249,18 +325,20 @@ public class HouseTask extends Task {
         }
         int centerGround = ground(level, o.getX() + sx / 2, o.getZ() + sz / 2);
         int floorY = centerGround - 1;
+        int levelling = candidate.fromSchematic() ? MAX_LEVELLING + 1 : MAX_LEVELLING;
+        int stride = Math.max(sx, sz) > 12 ? 2 : 1; // (a big house: every other column will do to judge it)
         double cost = 0;
-        for (int x = -1; x <= sx; x++) {
-            for (int z = -1; z <= sz; z++) {
+        for (int x = -1; x <= sx; x += stride) {
+            for (int z = -1; z <= sz; z += stride) {
                 boolean margin = x < 0 || z < 0 || x >= sx || z >= sz;
                 int gx = o.getX() + x;
                 int gz = o.getZ() + z;
                 int top = ground(level, gx, gz) - 1;
                 int diff = Math.abs(top - floorY);
-                if (diff > (margin ? MAX_LEVELLING + 1 : MAX_LEVELLING)) {
+                if (diff > (margin ? levelling + 1 : levelling)) {
                     return null;
                 }
-                cost += diff;
+                cost += diff * stride * stride;
                 BlockPos column = new BlockPos(gx, floorY, gz);
                 if (!bot.memory().inZone(level.dimension(), column) || ProtectedAreas.isProtected(level, column)) {
                     return null;
@@ -279,7 +357,7 @@ public class HouseTask extends Task {
             }
         }
         for (BotMemory other : BotRegistry.get(level.getServer()).all()) {
-            if (other != bot.memory() && other.bed() != null && other.bed().closerThan(o, 16)) {
+            if (other != bot.memory() && other.bed() != null && other.bed().closerThan(o.offset(sx / 2, 0, sz / 2), 16 + Math.max(sx, sz) / 2)) {
                 return null;
             }
         }
@@ -328,11 +406,92 @@ public class HouseTask extends Task {
             if (kind == '.' || kind == 'B' || kind == 'T') {
                 continue;
             }
-            if (!Blueprint.isDone(kind, level.getBlockState(cell.pos()))) {
+            if (!plan.isDone(cell, level.getBlockState(cell.pos()))) {
                 missing.merge(kind, 1, Integer::sum);
             }
         }
         return missing;
+    }
+
+    /** Left out for now: it couldn't get the item. */
+    private boolean unobtainable(Item item) {
+        Long until = UNOBTAINABLE.getOrDefault(bot.getUUID(), Map.of()).get(item);
+        return until != null && until > bot.level().getGameTime();
+    }
+
+    /**
+     * A schematic house: the materials for the next blocks to build, bottom up, a few stacks at a time
+     * (a big house is thousands of blocks), and earth or stone for the ground it's to stand on.
+     */
+    private Status gatherBatch() {
+        ServerLevel level = bot.level();
+        Map<Item, Integer> batch = new LinkedHashMap<>();
+        Map<Item, Integer> stacks = new HashMap<>();
+        int totalStacks = 0;
+        int ground = 0;
+        int soil = 0;
+        for (Blueprint.Cell cell : plan.cells()) {
+            if (skipped.contains(cell.pos())) {
+                continue;
+            }
+            char kind = cell.kind();
+            if (kind != 'X' && kind != 'g' && kind != 's') {
+                continue;
+            }
+            BlockState state = level.getBlockState(cell.pos());
+            if (plan.isDone(cell, state)) {
+                continue;
+            }
+            if (kind == 'g') {
+                ground++;
+                continue;
+            }
+            if (kind == 's') {
+                soil++;
+                continue;
+            }
+            Item item = cell.state().getBlock().asItem();
+            if (unobtainable(item)) {
+                continue;
+            }
+            int count = batch.merge(item, slabs(cell.state()), Integer::sum);
+            int need = (count + item.getDefaultMaxStackSize() - 1) / item.getDefaultMaxStackSize();
+            if (need > stacks.getOrDefault(item, 0)) {
+                stacks.put(item, need);
+                if (++totalStacks >= BATCH_STACKS) {
+                    break;
+                }
+            }
+        }
+        for (Map.Entry<Item, Integer> entry : batch.entrySet()) {
+            Target need = Target.of(entry.getKey(), entry.getValue());
+            if (!need.satisfied(bot)) {
+                bot.debug("house needs {}", need);
+                getting = entry.getKey();
+                child = new ObtainTask(bot, need, 0);
+                return Status.RUNNING;
+            }
+        }
+        getting = null;
+        List<Target> earth = new ArrayList<>();
+        earth.add(new Target("blocks to fill holes", Inv::isScaffold, Math.min(64, ground + 16)));
+        if (soil > 0) {
+            earth.add(Target.of(Items.DIRT, Math.min(64, soil)));
+        }
+        for (Target need : earth) {
+            if (!need.satisfied(bot)) {
+                bot.debug("house needs {}", need);
+                child = new ObtainTask(bot, need, 0);
+                return Status.RUNNING;
+            }
+        }
+        stage = Stage.CLEAR;
+        return Status.RUNNING;
+    }
+
+    /** A double slab takes two. */
+    private static int slabs(BlockState state) {
+        return state.hasProperty(BlockStateProperties.SLAB_TYPE) && state.getValue(BlockStateProperties.SLAB_TYPE) == SlabType.DOUBLE ? 2 : 1;
     }
 
     // ---- clearing and levelling -----------------------------------------------------------------
@@ -363,6 +522,24 @@ public class HouseTask extends Task {
         return Status.RUNNING;
     }
 
+    /** A schematic house: whatever grows or lies where the plan has it empty, top down (trees from their crowns). */
+    private Status clearSchematic() {
+        ServerLevel level = bot.level();
+        List<Blueprint.Cell> cells = plan.cells();
+        for (int i = cells.size() - 1; i >= 0; i--) {
+            Blueprint.Cell cell = cells.get(i);
+            if (cell.kind() != '.' || skipped.contains(cell.pos())) {
+                continue;
+            }
+            BlockState state = level.getBlockState(cell.pos());
+            if (isInTheWay(level, cell.pos(), state)) {
+                return dig(cell.pos());
+            }
+        }
+        stage = Stage.FILL;
+        return Status.RUNNING;
+    }
+
     /** Natural things that can go: earth and stone, trees, plants. */
     private static boolean isInTheWay(ServerLevel level, BlockPos pos, BlockState state) {
         if (state.isAir()) {
@@ -377,14 +554,21 @@ public class HouseTask extends Task {
         return BlockRules.canBreak(level, pos, state);
     }
 
-    /** Already the right block for the plan (a log where a log goes...). */
-    private boolean isPlanned(BlockPos pos, BlockState state) {
-        for (Blueprint.Cell cell : plan.cells()) {
-            if (cell.pos().equals(pos)) {
-                return cell.kind() != '.' && Blueprint.isDone(cell.kind(), state);
+    /** The plan's cell at a spot, or null. */
+    private @Nullable Blueprint.Cell cellAt(BlockPos pos) {
+        if (cellAt == null) {
+            cellAt = new HashMap<>();
+            for (Blueprint.Cell cell : plan.cells()) {
+                cellAt.put(cell.pos(), cell);
             }
         }
-        return false;
+        return cellAt.get(pos);
+    }
+
+    /** Already the right block for the plan (a log where a log goes...). */
+    private boolean isPlanned(BlockPos pos, BlockState state) {
+        Blueprint.Cell cell = cellAt(pos);
+        return cell != null && cell.kind() != '.' && plan.isDone(cell, state);
     }
 
     /** Holes under the floor and round the house filled in, so it stands on solid ground. */
@@ -401,12 +585,33 @@ public class HouseTask extends Task {
                 }
             }
         }
+        startBuilding();
+        return Status.RUNNING;
+    }
+
+    /** A schematic house: its ground (and garden) where the plan has it, filled in where it's missing. */
+    private Status fillSchematic() {
+        ServerLevel level = bot.level();
+        for (Blueprint.Cell cell : plan.cells()) {
+            char kind = cell.kind();
+            if (kind != 'g' && kind != 's' || skipped.contains(cell.pos())) {
+                continue;
+            }
+            BlockState state = level.getBlockState(cell.pos());
+            if (!plan.isDone(cell, state) && state.canBeReplaced()) {
+                return place(cell.pos(), plan.material(cell), null, null);
+            }
+        }
+        startBuilding();
+        return Status.RUNNING;
+    }
+
+    private void startBuilding() {
         stage = Stage.BUILD;
         if (!pillarLogging) {
             pillarLogging = true;
             bot.navigator().startPillarLog(); // pillars put up to reach the roof come down after
         }
-        return Status.RUNNING;
     }
 
     // ---- building ---------------------------------------------------------------------------
@@ -415,24 +620,31 @@ public class HouseTask extends Task {
         ServerLevel level = bot.level();
         for (Blueprint.Cell cell : plan.cells()) {
             char kind = cell.kind();
-            if (kind == '.' || kind == 'B' || kind == 'T' || skipped.contains(cell.pos())) {
+            if (kind == '.' || kind == 'B' || kind == 'T' || kind == 'g' || kind == 's' || skipped.contains(cell.pos())) {
                 continue;
             }
             BlockState state = level.getBlockState(cell.pos());
-            if (Blueprint.isDone(kind, state)) {
+            if (plan.isDone(cell, state)) {
                 continue;
             }
+            if (cell.state() != null && unobtainable(cell.state().getBlock().asItem())) {
+                continue; // (left out for now)
+            }
             if (!state.canBeReplaced()) {
-                if (isInTheWay(level, cell.pos(), state) || isOurScaffold(state)) {
-                    return dig(cell.pos());
+                if (isInTheWay(level, cell.pos(), state) || isOurScaffold(state)
+                    || cell.state() != null && state.getBlock() == cell.state().getBlock()) {
+                    return dig(cell.pos()); // (in the way; or the right block turned the wrong way: again)
                 }
                 skip(cell.pos(), "something else is in the way");
                 continue;
             }
-            Predicate<ItemStack> material = Blueprint.material(kind);
+            Predicate<ItemStack> material = plan.material(cell);
             if (Inv.count(bot, material) == 0) {
                 stage = Stage.MATERIALS; // ran out (some went into pillars and fills)
                 return Status.RUNNING;
+            }
+            if (cell.state() != null) {
+                return placeExact(cell);
             }
             Direction facing = kind == 'D' ? plan.front() : null;
             Direction face = kind == 't' ? wallFor(level, cell.pos())
@@ -471,13 +683,20 @@ public class HouseTask extends Task {
 
     private Status moveBed() {
         Blueprint.Cell foot = cellOf('B');
-        Direction back = plan.front().getOpposite();
+        if (foot == null) {
+            // (no room for a bed anywhere in it: a plan of no use to live in; a new one some other time)
+            bot.debug("house: the {} has nowhere for a bed; giving it up", plan.name());
+            bot.memory().setHouseSite(null, Direction.NORTH, 0);
+            return Status.FAILURE;
+        }
+        Direction head = plan.bedHead(foot);
         ServerLevel level = bot.level();
-        if (Blueprint.isDone('B', level.getBlockState(foot.pos()))) {
+        if (plan.isDone(foot, level.getBlockState(foot.pos()))) {
             stage = Stage.MOVE_TABLE;
             return Status.RUNNING;
         }
-        if (Inv.count(bot, Blueprint.material('B')) == 0) {
+        Predicate<ItemStack> bed = plan.material(foot);
+        if (Inv.count(bot, bed) == 0) {
             BlockPos old = bot.memory().bed();
             if (old != null && !skipped.contains(old) && HomeFinder.isBed(level, old) && !plan.inFootprint(old)) {
                 keepHutAsWorkshop(); // (before the bed goes: without it the hut is no home, see Home.validate)
@@ -487,23 +706,23 @@ public class HouseTask extends Task {
             child = new ObtainTask(bot, Target.tag(ItemTags.BEDS, 1), 0);
             return Status.RUNNING;
         }
-        for (BlockPos cell : new BlockPos[] {foot.pos(), foot.pos().relative(back)}) {
+        for (BlockPos cell : new BlockPos[] {foot.pos(), foot.pos().relative(head)}) {
             if (!level.getBlockState(cell).canBeReplaced()) {
                 return dig(cell); // (a ladder, a torch, a leftover block where the bed goes: out first)
             }
         }
-        return place(foot.pos(), Blueprint.material('B'), Direction.DOWN, back);
+        return place(foot.pos(), bed, Direction.DOWN, head);
     }
 
     private Status moveTable() {
         Blueprint.Cell spot = cellOf('T');
         ServerLevel level = bot.level();
-        if (Blueprint.isDone('T', level.getBlockState(spot.pos()))) {
-            moveIn(spot.pos());
+        if (spot == null || plan.isDone(spot, level.getBlockState(spot.pos()))) {
+            moveIn(spot != null ? spot.pos() : bot.memory().craftingTable());
             stage = Stage.DONE;
             return Status.SUCCESS;
         }
-        if (Inv.count(bot, Blueprint.material('T')) == 0) {
+        if (Inv.count(bot, plan.material(spot)) == 0) {
             BlockPos old = bot.memory().craftingTable();
             if (old != null && !skipped.contains(old) && level.getBlockState(old).is(Blocks.CRAFTING_TABLE)
                 && !plan.inFootprint(old)) {
@@ -516,7 +735,7 @@ public class HouseTask extends Task {
             // Something in its corner (a ladder or torch put up on the way, a block left from a pillar): out first
             return dig(spot.pos());
         }
-        return place(spot.pos(), Blueprint.material('T'), Direction.DOWN, null);
+        return place(spot.pos(), plan.material(spot), Direction.DOWN, null);
     }
 
     /** The hut stays as the workshop: its chests and furnace remain the bot's. */
@@ -527,33 +746,36 @@ public class HouseTask extends Task {
         }
     }
 
-    private void moveIn(BlockPos table) {
+    private void moveIn(@Nullable BlockPos table) {
         ServerLevel level = bot.level();
         BotMemory memory = bot.memory();
-        BlockPos head = cellOf('B').pos().relative(plan.front().getOpposite());
+        Blueprint.Cell foot = cellOf('B');
+        BlockPos head = foot.pos().relative(plan.bedHead(foot));
         Home.returnBorrowed(bot); // (what it used in someone else's house stays there)
         keepHutAsWorkshop();
         memory.setHome(GlobalPos.of(level.dimension(), plan.center()), true);
         memory.setBed(head);
         memory.setCraftingTable(table);
         for (Blueprint.Cell cell : plan.cells()) {
-            if (cell.kind() == 'H' && level.getBlockState(cell.pos()).is(Blocks.CHEST)) {
+            boolean chest = cell.kind() == 'H' || cell.state() != null && cell.state().is(Blocks.CHEST);
+            if (chest && level.getBlockState(cell.pos()).is(Blocks.CHEST)) {
                 memory.addChest(cell.pos());
             }
         }
         memory.setHouseDone(true);
+        memory.setRebuildAt(-1);
         HomeFinder.claim(level, head);
         bot.useBed(head);
-        bot.debug("moved into the new {} at {}", plan.template().name(), plan.origin().toShortString());
+        bot.debug("moved into the new {} at {}", plan.name(), plan.origin().toShortString());
     }
 
-    private Blueprint.Cell cellOf(char kind) {
+    private @Nullable Blueprint.Cell cellOf(char kind) {
         for (Blueprint.Cell cell : plan.cells()) {
             if (cell.kind() == kind) {
                 return cell;
             }
         }
-        throw new IllegalStateException("no " + kind + " in " + plan.template().name());
+        return null;
     }
 
     // ---- helpers --------------------------------------------------------------------------------
@@ -616,6 +838,23 @@ public class HouseTask extends Task {
         }
         bot.navigator().stop();
         BlockPlacer.place(bot, pos, material, face, facing);
+        return Status.RUNNING;
+    }
+
+    /** A schematic house's block, put down turned the way the plan has it. */
+    private Status placeExact(Blueprint.Cell cell) {
+        BlockPos pos = cell.pos();
+        if (!track(pos)) {
+            skip(pos, "can't place it");
+            return Status.RUNNING;
+        }
+        boolean standingInIt = bot.getBoundingBox().intersects(new AABB(pos));
+        if (standingInIt || !bot.isWithinBlockInteractionRange(pos, 0.0)) {
+            approach(pos);
+            return Status.RUNNING;
+        }
+        bot.navigator().stop();
+        Placement.place(bot, pos, cell.state());
         return Status.RUNNING;
     }
 

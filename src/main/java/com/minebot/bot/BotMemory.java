@@ -53,7 +53,8 @@ public class BotMemory {
             BlockPos.CODEC.optionalFieldOf("workshop").forGetter(e -> Optional.ofNullable(e.workshop)),
             Farm.CODEC.listOf().optionalFieldOf("farms", List.of()).forGetter(e -> e.farms),
             BlockPos.CODEC.listOf().optionalFieldOf("scaffold", List.of()).forGetter(e -> e.scaffold),
-            BlockPos.CODEC.listOf().optionalFieldOf("borrowed", List.of()).forGetter(e -> e.borrowed)
+            BlockPos.CODEC.listOf().optionalFieldOf("borrowed", List.of()).forGetter(e -> e.borrowed),
+            Codec.LONG.optionalFieldOf("rebuild_at", -1L).forGetter(e -> e.rebuildAt)
         ).apply(i, Extra::new));
 
         /** Lava near its zone's centre, to burn rubbish in. */
@@ -74,14 +75,16 @@ public class BotMemory {
         private final List<BlockPos> scaffold;
         /** Furniture in someone else's house it uses till it has a house of its own (then it's left there). */
         private final List<BlockPos> borrowed;
+        /** When it builds a new house (a schematic one) in place of its old template house; -1: not set yet. */
+        private long rebuildAt;
 
         Extra() {
-            this(Optional.empty(), -1L, -1L, Optional.empty(), Direction.NORTH, 0, false, Optional.empty(), List.of(), List.of(), List.of());
+            this(Optional.empty(), -1L, -1L, Optional.empty(), Direction.NORTH, 0, false, Optional.empty(), List.of(), List.of(), List.of(), -1L);
         }
 
         private Extra(Optional<GlobalPos> lava, long homeSince, long nextJourney, Optional<BlockPos> houseOrigin,
                       Direction houseFront, int houseTemplate, boolean houseDone, Optional<BlockPos> workshop,
-                      List<Farm> farms, List<BlockPos> scaffold, List<BlockPos> borrowed) {
+                      List<Farm> farms, List<BlockPos> scaffold, List<BlockPos> borrowed, long rebuildAt) {
             this.lava = lava.orElse(null);
             this.homeSince = homeSince;
             this.nextJourney = nextJourney;
@@ -93,6 +96,7 @@ public class BotMemory {
             this.farms = new ArrayList<>(farms);
             this.scaffold = new ArrayList<>(scaffold);
             this.borrowed = new ArrayList<>(borrowed);
+            this.rebuildAt = rebuildAt;
         }
     }
 
@@ -337,6 +341,15 @@ public class BotMemory {
     }
 
     /** What it put up to climb on and hasn't taken down yet (kept over sleeps and restarts). */
+    public long rebuildAt() {
+        return extra.rebuildAt;
+    }
+
+    public void setRebuildAt(long gameTime) {
+        extra.rebuildAt = gameTime;
+        changed();
+    }
+
     /** Furniture in someone else's house it uses (see Home#adoptStorage). */
     public List<BlockPos> borrowed() {
         changed();

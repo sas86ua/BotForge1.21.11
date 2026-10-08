@@ -87,9 +87,10 @@ public final class Home {
      */
     private static void noteClutter(BotPlayer bot, ServerLevel level) {
         BotMemory memory = bot.memory();
-        var templates = com.minebot.bot.build.HouseTemplates.ALL;
-        var plan = new com.minebot.bot.build.Blueprint(templates.get(Math.floorMod(memory.houseTemplate(), templates.size())),
-            memory.houseOrigin(), memory.houseFront());
+        var plan = com.minebot.bot.build.HousePlans.of(memory);
+        if (plan == null) {
+            return;
+        }
         for (var cell : plan.cells()) {
             if (cell.kind() != '.' || cell.layer() == 0 || !level.isLoaded(cell.pos())) {
                 continue;

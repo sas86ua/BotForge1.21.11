@@ -146,12 +146,8 @@ public final class Stash {
         if (bot.memory().houseOrigin() == null || bot.memory().houseDone()) {
             return false;
         }
-        for (char kind : "DHTSBGt".toCharArray()) {
-            if (com.minebot.bot.build.Blueprint.material(kind).test(stack)) {
-                return true;
-            }
-        }
-        return false;
+        var plan = com.minebot.bot.build.HousePlans.of(bot.memory());
+        return plan != null && plan.uses(stack.getItem()); // (a schematic house: any of its blocks, got ready a batch at a time)
     }
 
     private static boolean isBuildMaterial(BotPlayer bot, ItemStack stack) {

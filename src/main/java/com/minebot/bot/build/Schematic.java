@@ -41,7 +41,18 @@ public final class Schematic {
     }
 
     public static Schematic load(Path file) throws IOException {
-        CompoundTag tag = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+        return load(NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap()));
+    }
+
+    /** From a gzipped schematic in the mod's own files (see HouseSchematics). */
+    public static Schematic load(java.io.InputStream in) throws IOException {
+        return load(NbtIo.readCompressed(in, NbtAccounter.unlimitedHeap()));
+    }
+
+    private static Schematic load(CompoundTag tag) throws IOException {
+        if (tag.getByteArray("Blocks").isEmpty()) {
+            return loadSponge(tag.getCompound("Schematic").orElse(tag));
+        }
         int width = tag.getShortOr("Width", (short) 0);
         int height = tag.getShortOr("Height", (short) 0);
         int length = tag.getShortOr("Length", (short) 0);
@@ -83,7 +94,54 @@ public final class Schematic {
             }
             cells[i] = index;
         }
-        // Ground with nothing over it is the top of the ground: grass (or dirt), not just any rock
+        markSoil(palette, cells, width, height, length);
+        return new Schematic(width, height, length, pastePoint, List.copyOf(palette), cells, unknown);
+    }
+
+    /**
+     * The newer WorldEdit/Sponge ".schem" (versions 1-3): a palette of block states by name
+     * ("minecraft:spruce_stairs[facing=east,half=bottom]"), and each cell's palette index as a varint.
+     */
+    private static Schematic loadSponge(CompoundTag tag) throws IOException {
+        int width = tag.getShortOr("Width", (short) 0) & 0xFFFF;
+        int height = tag.getShortOr("Height", (short) 0) & 0xFFFF;
+        int length = tag.getShortOr("Length", (short) 0) & 0xFFFF;
+        CompoundTag blocks = tag.getCompound("Blocks").orElse(tag); // (version 3 keeps them in "Blocks")
+        CompoundTag paletteTag = blocks.getCompound("Palette").orElseThrow(() -> new IOException("no Palette"));
+        byte[] data = blocks.getByteArray(blocks == tag ? "BlockData" : "Data").orElseThrow(() -> new IOException("no block data"));
+        if (width <= 0 || height <= 0 || length <= 0) {
+            throw new IOException("bad size " + width + "x" + height + "x" + length);
+        }
+        Map<Integer, LegacyBlocks.Spec> byId = new HashMap<>();
+        for (String name : paletteTag.keySet()) {
+            int id = paletteTag.getIntOr(name, -1);
+            byId.put(id, ModernBlocks.spec(name));
+        }
+        List<LegacyBlocks.Spec> palette = new ArrayList<>();
+        Map<LegacyBlocks.Spec, Short> indexOf = new HashMap<>();
+        short[] cells = new short[width * height * length];
+        int cell = 0;
+        for (int i = 0; i < data.length && cell < cells.length; ) {
+            int value = 0;
+            int shift = 0;
+            byte b;
+            do {
+                b = data[i++];
+                value |= (b & 0x7F) << shift;
+                shift += 7;
+            } while ((b & 0x80) != 0 && i < data.length);
+            LegacyBlocks.Spec spec = byId.getOrDefault(value, LegacyBlocks.Spec.SKIP);
+            cells[cell++] = indexOf.computeIfAbsent(spec, s -> {
+                palette.add(s);
+                return (short) (palette.size() - 1);
+            });
+        }
+        markSoil(palette, cells, width, height, length);
+        return new Schematic(width, height, length, BlockPos.ZERO, List.copyOf(palette), cells, new TreeMap<>());
+    }
+
+    /** Ground with nothing over it is the top of the ground: grass (or dirt), not just any rock. */
+    private static void markSoil(List<LegacyBlocks.Spec> palette, short[] cells, int width, int height, int length) {
         short soil = (short) palette.size();
         palette.add(new LegacyBlocks.Spec(LegacyBlocks.Kind.SOIL, null));
         for (int y = 0; y < height; y++) {
@@ -97,7 +155,6 @@ public final class Schematic {
                 }
             }
         }
-        return new Schematic(width, height, length, pastePoint, List.copyOf(palette), cells, unknown);
     }
 
     public int width() {

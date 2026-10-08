@@ -86,12 +86,10 @@ public class ClearTreesTask extends Task {
         List<BoundingBox> boxes = new ArrayList<>();
         if (memory.houseOrigin() != null && memory.houseDone()) {
             // The house: its plan, roof and all
-            var templates = com.minebot.bot.build.HouseTemplates.ALL;
-            var plan = new com.minebot.bot.build.Blueprint(templates.get(Math.floorMod(memory.houseTemplate(), templates.size())),
-                memory.houseOrigin(), memory.houseFront());
+            var plan = com.minebot.bot.build.HousePlans.of(memory);
             BlockPos o = plan.origin();
             boxes.add(new BoundingBox(o.getX(), o.getY(), o.getZ(),
-                o.getX() + plan.sizeX() - 1, o.getY() + plan.template().height(), o.getZ() + plan.sizeZ() - 1));
+                o.getX() + plan.sizeX() - 1, plan.topY() + 1, o.getZ() + plan.sizeZ() - 1));
         }
         Set<BlockPos> anchors = new LinkedHashSet<>();
         if (memory.bed() != null) {

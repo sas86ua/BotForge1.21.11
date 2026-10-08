@@ -20,9 +20,12 @@ import java.util.function.Predicate;
  * must be. The template's front (local z = 0, with the door) faces
  * {@code front}; {@code origin} is the lowest north-west corner of the floor.
  */
-public final class Blueprint {
-    /** One block of the plan. */
-    public record Cell(BlockPos pos, char kind, int layer) {
+public final class Blueprint implements HousePlan {
+    /** One block of the plan; {@code state}: the exact block (and which way it's turned), for plans read from a schematic. */
+    public record Cell(BlockPos pos, char kind, int layer, @org.jetbrains.annotations.Nullable BlockState state) {
+        public Cell(BlockPos pos, char kind, int layer) {
+            this(pos, kind, layer, null);
+        }
     }
 
     private final HouseTemplates.Template template;
@@ -56,6 +59,48 @@ public final class Blueprint {
 
     public HouseTemplates.Template template() {
         return template;
+    }
+
+    @Override
+    public String name() {
+        return template.name();
+    }
+
+    @Override
+    public HousePlan atFloor(int floorY) {
+        return new Blueprint(template, origin.atY(floorY), front);
+    }
+
+    @Override
+    public boolean fromSchematic() {
+        return false;
+    }
+
+    @Override
+    public Predicate<ItemStack> material(Cell cell) {
+        return material(cell.kind());
+    }
+
+    @Override
+    public boolean isDone(Cell cell, BlockState state) {
+        return isDone(cell.kind(), state);
+    }
+
+    @Override
+    public Direction bedHead(Cell foot) {
+        return front.getOpposite();
+    }
+
+    /** The made pieces it keeps in the bag (doors, chests, table, smoker, bed, windows, torches). */
+    @Override
+    public boolean uses(net.minecraft.world.item.Item item) {
+        ItemStack stack = new ItemStack(item);
+        for (char kind : "DHTSBGt".toCharArray()) {
+            if (material(kind).test(stack)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public BlockPos origin() {
