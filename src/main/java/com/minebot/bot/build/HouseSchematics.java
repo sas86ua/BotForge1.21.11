@@ -140,6 +140,39 @@ public final class HouseSchematics {
      * What the bots actually build in a house's cell: the plan's block, a look-alike, or null (left
      * out: buttons, signs, flower pots, anvils, gold, beds but the first - so no other bot moves in).
      */
+    /** The kinds of wood a house can be built of (0: as the plan has it). */
+    public static final String[] WOODS = {"", "oak", "spruce", "birch", "jungle", "acacia", "dark_oak", "mangrove", "cherry", "pale_oak"};
+
+    /** The plan's block, of the bot's own wood (the trees round its home) instead of the plan's. */
+    public static @org.jetbrains.annotations.Nullable BlockState adapt(BlockState state, int wood) {
+        BlockState adapted = adapt(state);
+        if (adapted == null || wood <= 0 || wood >= WOODS.length) {
+            return adapted;
+        }
+        String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(adapted.getBlock()).getPath();
+        String prefix = path.startsWith("stripped_") ? "stripped_" : "";
+        String rest = path.substring(prefix.length());
+        for (int i = WOODS.length - 1; i > 0; i--) { // (dark_oak and pale_oak before oak)
+            String from = WOODS[i] + "_";
+            if (rest.startsWith(from) && !WOODS[i].equals(WOODS[wood])) {
+                var id = net.minecraft.resources.Identifier.withDefaultNamespace(prefix + WOODS[wood] + "_" + rest.substring(from.length()));
+                Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
+                if (block == null) {
+                    return adapted;
+                }
+                BlockState result = block.defaultBlockState();
+                for (Property<?> property : adapted.getProperties()) {
+                    result = copy(result, adapted, property);
+                }
+                return result;
+            }
+            if (rest.startsWith(from)) {
+                return adapted;
+            }
+        }
+        return adapted;
+    }
+
     public static @org.jetbrains.annotations.Nullable BlockState adapt(BlockState state) {
         Block block = state.getBlock();
         String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).getPath();

@@ -231,8 +231,10 @@ public class HouseTask extends Task {
         }
         if (designQueue == null) {
             designQueue = new ArrayList<>();
+            int wood = localWood();
+            bot.debug("house: the trees round here are mostly {}", com.minebot.bot.build.HouseSchematics.WOODS[wood]);
             for (int i = 0; i < HousePlans.designs(); i++) {
-                designQueue.add(HousePlans.SCHEMATIC_BASE + i);
+                designQueue.add(HousePlans.index(i, wood));
             }
             Collections.shuffle(designQueue, new java.util.Random(bot.getRandom().nextLong()));
         }
@@ -255,6 +257,33 @@ public class HouseTask extends Task {
         bot.debug("house: building a {} at {} facing {}", plan.name(), plan.origin().toShortString(), plan.front());
         stage = Stage.MATERIALS;
         return Status.RUNNING;
+    }
+
+    /**
+     * The wood it builds with: whatever grows most round its home (a spruce house where there are only
+     * oaks went up with half its blocks left out); oak if it sees no trees.
+     */
+    private int localWood() {
+        ServerLevel level = bot.level();
+        BlockPos bed = bot.memory().bed() != null ? bot.memory().bed() : bot.blockPosition();
+        int[] counts = new int[com.minebot.bot.build.HouseSchematics.WOODS.length];
+        for (BlockPos pos : BlockSearch.find(level, bed, 64, bed.getY() - 16, bed.getY() + 32, state -> state.is(BlockTags.LOGS),
+            (pos, state) -> true, 3000)) {
+            String path = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock()).getPath();
+            String woodName = path.replace("stripped_", "").replace("_log", "").replace("_wood", "");
+            for (int i = 1; i < counts.length; i++) {
+                if (com.minebot.bot.build.HouseSchematics.WOODS[i].equals(woodName)) {
+                    counts[i]++;
+                }
+            }
+        }
+        int best = 1;
+        for (int i = 2; i < counts.length; i++) {
+            if (counts[i] > counts[best]) {
+                best = i;
+            }
+        }
+        return best;
     }
 
     private @Nullable HousePlan findSite(int index) {

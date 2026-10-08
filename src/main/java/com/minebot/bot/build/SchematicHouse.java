@@ -28,6 +28,7 @@ import java.util.function.Predicate;
  */
 public final class SchematicHouse implements HousePlan {
     private final HouseSchematics.Design design;
+    private final int wood;
     private final BlockPos origin;
     private final Direction front;
     private final int steps;
@@ -35,6 +36,12 @@ public final class SchematicHouse implements HousePlan {
     private final Set<Item> items = new HashSet<>();
 
     public SchematicHouse(HouseSchematics.Design design, BlockPos origin, Direction front) {
+        this(design, origin, front, 0);
+    }
+
+    /** @param wood which wood it's built of (see {@link HouseSchematics#WOODS}; 0: the plan's own) */
+    public SchematicHouse(HouseSchematics.Design design, BlockPos origin, Direction front, int wood) {
+        this.wood = wood;
         this.design = design;
         this.origin = origin;
         this.front = front;
@@ -56,7 +63,7 @@ public final class SchematicHouse implements HousePlan {
                 case GROUND -> kinds[i] = 'g';
                 case SOIL -> kinds[i] = 's';
                 case EXACT -> {
-                    BlockState state = HouseSchematics.adapt(spec.state());
+                    BlockState state = HouseSchematics.adapt(spec.state(), wood);
                     if (state == null) {
                         break;
                     }
@@ -266,7 +273,7 @@ public final class SchematicHouse implements HousePlan {
 
     @Override
     public HousePlan atFloor(int floorY) {
-        return new SchematicHouse(design, origin.atY(floorY - design.groundLayer()), front);
+        return new SchematicHouse(design, origin.atY(floorY - design.groundLayer()), front, wood);
     }
 
     @Override

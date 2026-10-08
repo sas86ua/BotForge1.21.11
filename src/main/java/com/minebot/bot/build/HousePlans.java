@@ -20,8 +20,13 @@ public final class HousePlans {
     private HousePlans() {
     }
 
+    /** Number of a schematic house: SCHEMATIC_BASE + design + 10 x wood (see HouseSchematics#WOODS). */
+    public static int index(int design, int wood) {
+        return SCHEMATIC_BASE + design + 10 * wood;
+    }
+
     public static boolean isSchematic(int index) {
-        return index >= SCHEMATIC_BASE && index - SCHEMATIC_BASE < HouseSchematics.all().size();
+        return index >= SCHEMATIC_BASE && (index - SCHEMATIC_BASE) % 10 < HouseSchematics.all().size();
     }
 
     public static int designs() {
@@ -30,7 +35,7 @@ public final class HousePlans {
 
     public static HousePlan create(int index, BlockPos origin, Direction front) {
         if (isSchematic(index)) {
-            return new SchematicHouse(HouseSchematics.all().get(index - SCHEMATIC_BASE), origin, front);
+            return new SchematicHouse(HouseSchematics.all().get((index - SCHEMATIC_BASE) % 10), origin, front, (index - SCHEMATIC_BASE) / 10);
         }
         return new Blueprint(HouseTemplates.ALL.get(Math.floorMod(index, HouseTemplates.ALL.size())), origin, front);
     }
