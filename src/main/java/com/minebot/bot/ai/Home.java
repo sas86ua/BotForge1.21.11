@@ -72,6 +72,31 @@ public final class Home {
         }
     }
 
+    private static final int CLUTTER_CHECK_TICKS = 20 * 60 * 5;
+
+    /**
+     * A block of dirt or cobblestone (a step it stood on, a block put down in passing) in its house where the
+     * plan has it empty - by the bed, in the way: taken out like a pillar (see DismantleTask). Furniture and
+     * torches stay where they are.
+     */
+    private static void noteClutter(BotPlayer bot, ServerLevel level) {
+        BotMemory memory = bot.memory();
+        var templates = com.minebot.bot.build.HouseTemplates.ALL;
+        var plan = new com.minebot.bot.build.Blueprint(templates.get(Math.floorMod(memory.houseTemplate(), templates.size())),
+            memory.houseOrigin(), memory.houseFront());
+        for (var cell : plan.cells()) {
+            if (cell.kind() != '.' || cell.layer() == 0 || !level.isLoaded(cell.pos())) {
+                continue;
+            }
+            net.minecraft.world.level.block.state.BlockState state = level.getBlockState(cell.pos());
+            if (!state.isAir() && com.minebot.bot.action.Inv.isScaffold(new net.minecraft.world.item.ItemStack(state.getBlock().asItem()))
+                && !bot.pillars().contains(cell.pos())) {
+                bot.debug("a block of {} in my house at {}; taking it out", state.getBlock().getName().getString(), cell.pos().toShortString());
+                bot.notePillar(cell.pos().immutable());
+            }
+        }
+    }
+
     /**
      * Its house is lost: it's built again, like the first one, 20-30 days after it has a home again (a hut,
      * a bed somewhere) - the clock starts over then.
@@ -189,6 +214,12 @@ public final class Home {
                 houseLost(bot);
                 return;
             }
+        }
+        if (bed != null && memory.houseDone() && memory.houseOrigin() != null && level.isLoaded(bed)) {
+            bot.every("house clutter", CLUTTER_CHECK_TICKS, () -> {
+                noteClutter(bot, level);
+                return false;
+            });
         }
         if (bed != null && memory.houseDone() && level.isLoaded(bed) && level.canSeeSky(bed.above())) {
             // The house round the bed is gone (burnt, blown up, pulled down): a shelter round the bed for now,

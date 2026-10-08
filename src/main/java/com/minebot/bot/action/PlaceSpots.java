@@ -69,6 +69,16 @@ public final class PlaceSpots {
             && BlockRules.isStandable(level, pos.below(), below)
             // (not on a piece of furniture: a table on the bed, a furnace on a chest)
             && !below.is(net.minecraft.tags.BlockTags.BEDS) && !below.hasBlockEntity()
-            && !below.is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE);
+            && !below.is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE)
+            && !besideBed(level, pos); // (nor right beside a bed: a furnace at its foot, a block by its side)
+    }
+
+    private static boolean besideBed(ServerLevel level, BlockPos pos) {
+        for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            if (level.getBlockState(pos.relative(direction)).is(net.minecraft.tags.BlockTags.BEDS)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

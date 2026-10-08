@@ -38,6 +38,9 @@ public class GreatBuildPrepTask extends Task {
     private @Nullable Task child;
     private boolean sideErrand;
     private boolean chestTried;
+    /** How many it's getting this time: a stack, or less after a stack couldn't be had. */
+    private int batch;
+    private static final int MIN_BATCH = 8;
 
     public GreatBuildPrepTask(BotPlayer bot) {
         super(bot);
@@ -117,10 +120,11 @@ public class GreatBuildPrepTask extends Task {
             }
             int stackSize = item.getDefaultMaxStackSize();
             int inBag = Inv.count(bot, stack -> stack.is(item));
-            bot.debug("great build: getting {} {} ready ({} still to go)", Math.min(missing, stackSize), GreatBuild.key(item), missing);
+            batch = Math.min(missing, batch > 0 ? batch : stackSize);
+            bot.debug("great build: getting {} {} ready ({} still to go)", batch, GreatBuild.key(item), missing);
             bot.setMiningRule(mine());
             bot.setLeaveWhileSmelting(true);
-            child = new ObtainTask(bot, Target.of(item, inBag + Math.min(missing, stackSize)), 0).notFromChests();
+            child = new ObtainTask(bot, Target.of(item, inBag + batch), 0).notFromChests();
         }
         Status status = child.tick();
         int cooking = bot.takeLeftCooking();
@@ -140,6 +144,12 @@ public class GreatBuildPrepTask extends Task {
         bot.setLeaveWhileSmelting(false);
         if (sideErrand) {
             sideErrand = false; // (a second furnace, another chest: no matter if there was no room)
+            return Status.RUNNING;
+        }
+        if (status == Status.FAILURE && batch > MIN_BATCH) {
+            // A whole stack is too much (dye enough for 25 of 64, say): a smaller batch, what there's enough for
+            batch /= 2;
+            bot.debug("great build: can't get that much {}; trying {}", GreatBuild.key(item), batch);
             return Status.RUNNING;
         }
         if (status == Status.FAILURE) {
