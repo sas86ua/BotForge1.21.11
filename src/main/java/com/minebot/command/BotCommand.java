@@ -142,6 +142,11 @@ public final class BotCommand {
                 .then(botArgument()
                     .then(Commands.argument("pos", BlockPosArgument.blockPos())
                         .executes(BotCommand::setWorkshop))))
+            .then(Commands.literal("home")
+                .then(botArgument()
+                    .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                        .executes(ctx -> moveHome(ctx, false))
+                        .then(Commands.literal("keep").executes(ctx -> moveHome(ctx, true))))))
             .then(Commands.literal("come")
                 .then(botArgument().executes(ctx -> {
                     BotPlayer bot = getBot(ctx);
@@ -385,6 +390,109 @@ public final class BotCommand {
             }
         }
         reply(ctx, bot.getPlainTextName() + "'s workshop is at " + workshop.toShortString() + " (" + chests + " chests added)");
+        return 1;
+    }
+
+    /**
+     * Moves the bot into the bed at (or next to) this spot: that's its home now, and its zone round it; the
+     * chests, furnace, crafting table and campfire round the bed are its own. Under a roof the place counts as
+     * its house (no house built); a bed in the open is a hut's, and a house is built by it in time. The old
+     * home is left, or with "keep" its chests and fields stay its own too (a store it fetches from).
+     */
+    private static int moveHome(CommandContext<CommandSourceStack> ctx, boolean keep) throws CommandSyntaxException {
+        BotPlayer bot = getBot(ctx);
+        ServerLevel level = ctx.getSource().getLevel();
+        BlockPos at = BlockPosArgument.getBlockPos(ctx, "pos");
+        if (!level.isLoaded(at)) {
+            ctx.getSource().sendFailure(Component.literal("That spot isn't loaded"));
+            return 0;
+        }
+        BlockPos bed = BlockPos.betweenClosedStream(at.offset(-2, -1, -2), at.offset(2, 1, 2))
+            .filter(pos -> level.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.BedBlock)
+            .map(BlockPos::immutable)
+            .min(java.util.Comparator.comparingDouble(pos -> pos.distSqr(at)))
+            .orElse(null);
+        if (bed == null) {
+            ctx.getSource().sendFailure(Component.literal("No bed at " + at.toShortString()));
+            return 0;
+        }
+        BlockState state = level.getBlockState(bed);
+        if (state.getValue(net.minecraft.world.level.block.BedBlock.PART) == net.minecraft.world.level.block.state.properties.BedPart.FOOT) {
+            bed = bed.relative(state.getValue(net.minecraft.world.level.block.BedBlock.FACING)); // (a bot's bed is its head)
+        }
+        for (BotMemory other : BotRegistry.get(level.getServer()).all()) {
+            if (other != bot.memory() && other.bed() != null && other.homeDimension() == level.dimension() && other.bed().closerThan(bed, 2)) {
+                ctx.getSource().sendFailure(Component.literal("That's " + other.name() + "'s bed"));
+                return 0;
+            }
+        }
+        BotMemory memory = bot.memory();
+        List<BlockPos> oldChests = List.copyOf(memory.chests());
+        if (memory.home() != null && memory.bed() != null) {
+            ServerLevel oldLevel = level.getServer().getLevel(memory.home().dimension());
+            if (oldLevel != null) {
+                com.minebot.bot.world.HomeFinder.release(oldLevel, memory.bed());
+            }
+        }
+        Home.returnBorrowed(bot);
+        boolean sameWorld = memory.homeDimension() == level.dimension();
+        memory.setHome(null, false); // (chests, furnace, table, campfire, workshop: all forgotten)
+        if (!keep) {
+            for (var farm : List.copyOf(memory.farms())) {
+                memory.removeFarm(farm);
+            }
+        }
+        boolean roofed = !level.canSeeSky(bed.above());
+        memory.setHouseSite(null, net.minecraft.core.Direction.NORTH, 0);
+        memory.setHouseDone(roofed);
+        memory.setRebuildAt(-1);
+        memory.setHomeSince(level.getGameTime()); // (a house of its own in 20-30 days, if this is no house)
+        memory.setHome(GlobalPos.of(level.dimension(), bed), false);
+        memory.setBed(bed);
+        com.minebot.bot.world.HomeFinder.claim(level, bed);
+        bot.setAnchor(GlobalPos.of(level.dimension(), bed));
+        java.util.Set<BlockPos> taken = new java.util.HashSet<>();
+        for (BotMemory other : BotRegistry.get(level.getServer()).all()) {
+            if (other != memory) {
+                java.util.stream.Stream.of(other.furnace(), other.craftingTable(), other.campfire()).filter(java.util.Objects::nonNull).forEach(taken::add);
+            }
+        }
+        int chests = 0;
+        for (BlockPos pos : BlockPos.betweenClosed(bed.offset(-WORKSHOP_RANGE * 2, -3, -WORKSHOP_RANGE * 2),
+                bed.offset(WORKSHOP_RANGE * 2, 3, WORKSHOP_RANGE * 2))) {
+            BlockState block = level.getBlockState(pos);
+            if (block.getBlock() instanceof ChestBlock || block.getBlock() instanceof net.minecraft.world.level.block.BarrelBlock) {
+                BlockPos other = !(block.getBlock() instanceof ChestBlock) || block.getValue(ChestBlock.TYPE) == ChestType.SINGLE ? pos
+                    : pos.relative(ChestBlock.getConnectedDirection(block));
+                if (!isBotChest(level, pos) && !isBotChest(level, other)) {
+                    memory.addChest(pos.immutable());
+                    chests++;
+                }
+            } else if (taken.contains(pos)) {
+                continue; // (another bot's)
+            } else if (block.getBlock() instanceof FurnaceBlock && (memory.furnace() == null || pos.distSqr(bed) < memory.furnace().distSqr(bed))) {
+                memory.setFurnace(pos.immutable());
+            } else if (block.is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE)
+                && (memory.craftingTable() == null || pos.distSqr(bed) < memory.craftingTable().distSqr(bed))) {
+                memory.setCraftingTable(pos.immutable());
+            } else if (block.getBlock() instanceof CampfireBlock && memory.campfire() == null) {
+                memory.setCampfire(pos.immutable());
+            }
+        }
+        int kept = 0;
+        if (keep && sameWorld) {
+            for (BlockPos chest : oldChests) {
+                if (!memory.chests().contains(chest)) {
+                    memory.addChest(chest);
+                    kept++;
+                }
+            }
+        }
+        bot.brain().reconsider(); // (off home now, whatever it was doing for the old one)
+        bot.debug("moved to the bed at {} by command{}", bed.toShortString(), roofed ? "" : " (a hut: a house in time)");
+        reply(ctx, bot.getPlainTextName() + " lives at " + bed.toShortString() + " now (" + chests + " chests there"
+            + (memory.furnace() != null ? ", a furnace" : "") + (memory.craftingTable() != null ? ", a crafting table" : "")
+            + (kept > 0 ? "; " + kept + " old chests kept" : "") + (roofed ? "" : "; no roof over the bed: it will build a house") + ")");
         return 1;
     }
 
