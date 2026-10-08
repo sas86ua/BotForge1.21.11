@@ -200,7 +200,36 @@ public class BotMemory {
         return builtHome;
     }
 
+    /** How far from a new home what it had before (furnace, crafting table, campfire, workshop) is still its own. */
+    private static final int KEEP_RANGE = 48;
+
+    /**
+     * The bed is lost (broken, burnt): the home goes with it, but not what was its own there - the chests stay
+     * its store wherever it lives next, and the furnace, table and workshop too if the new home is near them.
+     */
+    public void loseHome() {
+        this.home = null;
+        this.builtHome = false;
+        this.bed = null;
+        changed();
+    }
+
     public void setHome(@Nullable GlobalPos home, boolean built) {
+        if (home != null && (this.home == null || this.home.dimension() == home.dimension())) {
+            BlockPos at = home.pos();
+            if (craftingTable != null && !craftingTable.closerThan(at, KEEP_RANGE)) {
+                craftingTable = null;
+            }
+            if (furnace != null && !furnace.closerThan(at, KEEP_RANGE)) {
+                furnace = null;
+            }
+            if (campfire != null && !campfire.closerThan(at, KEEP_RANGE)) {
+                campfire = null;
+            }
+            if (extra.workshop != null && !extra.workshop.closerThan(at, KEEP_RANGE)) {
+                extra.workshop = null;
+            }
+        }
         this.home = home;
         this.builtHome = built;
         if (home == null) {

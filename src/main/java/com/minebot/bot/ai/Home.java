@@ -217,8 +217,8 @@ public final class Home {
                 bot.debug("took my bed from {} to move into the house", bed.toShortString());
                 memory.setBed(null);
             } else {
-                bot.debug("my bed at {} is gone; looking for a new home", bed.toShortString());
-                memory.setHome(null, false);
+                bot.debug("my bed at {} is gone; looking for a new home (my chests stay mine)", bed.toShortString());
+                memory.loseHome();
                 houseLost(bot);
                 return;
             }
