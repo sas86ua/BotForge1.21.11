@@ -139,6 +139,12 @@ public class GatherTask extends Task {
             bot.debug("{} at {} is too deep under water, leaving it", source.name(), current.toShortString());
             breaker.cancel();
             giveUpOn(current);
+            // (and the rest of it down there: block after block of the same seam, a dive and a gasp each, it went on)
+            for (BlockPos near : BlockPos.betweenClosed(current.offset(-6, -6, -6), current.offset(6, 6, 6))) {
+                if (blocks.test(bot.level().getBlockState(near)) && nextToWater(near)) {
+                    failed.add(near.immutable());
+                }
+            }
             current = null;
             return Status.RUNNING;
         }
@@ -267,6 +273,16 @@ public class GatherTask extends Task {
     }
 
     /** Marks a block as unreachable; for a tree, the whole trunk (its other logs are just as hard to get at). */
+    /** Water beside or over it (within a couple of blocks up): it's under the water. */
+    private boolean nextToWater(BlockPos pos) {
+        for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.values()) {
+            if (bot.level().getFluidState(pos.relative(direction)).is(net.minecraft.tags.FluidTags.WATER)) {
+                return true;
+            }
+        }
+        return bot.level().getFluidState(pos.above(2)).is(net.minecraft.tags.FluidTags.WATER);
+    }
+
     private void giveUpOn(BlockPos pos) {
         failed.add(pos);
         if (source == Sources.LOGS) {
