@@ -54,6 +54,16 @@ public class HuntTask extends Task {
         this.kills = kills;
         this.target = target;
         this.maxExplores = maxExplores;
+        this.shearing = !kills.isEmpty() && kills.stream().allMatch(kill -> kill.type() == net.minecraft.world.entity.EntityType.SHEEP
+            && new net.minecraft.world.item.ItemStack(kill.drop()).is(net.minecraft.tags.ItemTags.WOOL));
+    }
+
+    /** After wool: the sheep are shorn (1-3 wool each, and it grows back), not killed. */
+    private final boolean shearing;
+    private boolean shearsTried;
+
+    private boolean hasShears() {
+        return com.minebot.bot.action.Inv.count(bot, stack -> stack.is(net.minecraft.world.item.Items.SHEARS)) > 0;
     }
 
     /** Prey only this close (keeping a player company: not off across the land after some far chicken). */
@@ -74,6 +84,23 @@ public class HuntTask extends Task {
         }
         if (target.satisfied(bot)) {
             return Status.SUCCESS;
+        }
+        if (shearing && !shearsTried && !hasShears()) {
+            // (two iron: far better than a sheep a wool; without them it hunts them as before)
+            shearsTried = true;
+            bot.debug("wool to get: shears first, to shear the sheep");
+            child = new ObtainTask(bot, Target.of(net.minecraft.world.item.Items.SHEARS, 1), 1);
+            return Status.RUNNING;
+        }
+        boolean shear = shearing && hasShears();
+        if (shear && prey instanceof net.minecraft.world.entity.animal.sheep.Sheep sheep && sheep.isSheared()) {
+            Vec3 at = prey.position();
+            prey = null;
+            if (!Home.isNear(bot, 48)) {
+                Stash.makeRoom(bot, 2);
+            }
+            child = new CollectItemsTask(bot, at, 5.0, 100);
+            return Status.RUNNING;
         }
         if (prey != null && !prey.isAlive()) {
             Vec3 at = prey.position();
@@ -119,6 +146,17 @@ public class HuntTask extends Task {
         }
         bot.navigator().stop();
         heading = null;
+        if (shear) {
+            com.minebot.bot.action.Inv.select(bot, stack -> stack.is(net.minecraft.world.item.Items.SHEARS));
+            bot.controller().lookAt(prey.getEyePosition());
+            bot.interactOn(prey, net.minecraft.world.InteractionHand.MAIN_HAND);
+            bot.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            if (prey instanceof net.minecraft.world.entity.animal.sheep.Sheep sheep && !sheep.isSheared()) {
+                givenUp.add(prey.getUUID()); // (couldn't shear it: some other one)
+                prey = null;
+            }
+            return Status.RUNNING;
+        }
         bot.combat().selectMeleeWeapon();
         bot.controller().steer(prey.position(), 1.2);
         bot.combat().strike(prey);
@@ -128,7 +166,8 @@ public class HuntTask extends Task {
     private @Nullable LivingEntity findPrey() {
         LivingEntity best = null;
         for (Sources.Kill kill : kills) {
-            LivingEntity found = findPrey(bot, kill, givenUp, radius);
+            // (shearing harms none: a lone sheep too)
+            LivingEntity found = shearing && hasShears() ? findAny(bot, kill, givenUp, radius) : findPrey(bot, kill, givenUp, radius);
             if (found != null && (best == null || bot.distanceToSqr(found) < bot.distanceToSqr(best))) {
                 best = found;
             }
@@ -148,6 +187,15 @@ public class HuntTask extends Task {
                 entity -> isFairGame(bot, kill, entity) && !exclude.contains(entity.getUUID()))
             .stream()
             .filter(entity -> herdSize(bot, entity) >= MIN_HERD)
+            .min(Comparator.comparingDouble(bot::distanceToSqr))
+            .orElse(null);
+    }
+
+    /** The nearest animal of this kind within {@code radius}, however small its herd (to shear, not to kill). */
+    private static @Nullable LivingEntity findAny(BotPlayer bot, Sources.Kill kill, Set<UUID> exclude, int radius) {
+        return bot.level().getEntitiesOfClass(LivingEntity.class, bot.getBoundingBox().inflate(radius),
+                entity -> isFairGame(bot, kill, entity) && !exclude.contains(entity.getUUID()))
+            .stream()
             .min(Comparator.comparingDouble(bot::distanceToSqr))
             .orElse(null);
     }
