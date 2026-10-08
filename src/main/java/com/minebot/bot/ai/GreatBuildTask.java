@@ -308,10 +308,10 @@ public class GreatBuildTask extends Task {
         return best;
     }
 
-    /** About this share of the bots at the site (a fifth) clear it first (digging out what the plan has empty), the rest build. */
-    private static final double DIGGERS = 0.2;
+    /** About this share of the bots at the site (half) clear it first (digging out what the plan has empty), the rest build. */
+    private static final double DIGGERS = 0.5;
 
-    /** One of the site's diggers: the first fifth of the bots working there (by id, so the same ones; at least one). */
+    /** One of the site's diggers: the first half of the bots working there (by id, so the same ones; at least one). */
     private static boolean isDigger(BotPlayer bot) {
         List<UUID> working = new ArrayList<>();
         AWAY.forEach((uuid, stage) -> {
