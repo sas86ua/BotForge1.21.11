@@ -226,7 +226,23 @@ public final class BotCommand {
                 com.minebot.stats.ServerStats.post(ctx.getSource().getServer()); // (the hourly summary, now)
                 return 1;
             }))
-            .then(Commands.literal("house").then(Commands.literal("designs").executes(BotCommand::houseDesigns)))
+            .then(Commands.literal("house")
+                .then(Commands.literal("designs").executes(BotCommand::houseDesigns))
+                .then(Commands.literal("rebuild").then(Commands.argument("bot", StringArgumentType.word())
+                    .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(BotManager.all().stream().map(BotPlayer::getPlainTextName), builder))
+                    .executes(ctx -> {
+                        // (an admin's "now": the bot builds a schematic house in place of its old one at once)
+                        String name = StringArgumentType.getString(ctx, "bot");
+                        for (BotPlayer bot : BotManager.all()) {
+                            if (bot.getPlainTextName().equalsIgnoreCase(name)) {
+                                bot.memory().setRebuildAt(bot.level().getGameTime());
+                                reply(ctx, name + " will build a new house as soon as it can (in daylight, at home)");
+                                return 1;
+                            }
+                        }
+                        ctx.getSource().sendFailure(Component.literal("No bot " + name));
+                        return 0;
+                    }))))
             .then(Commands.literal("spawnpoint")
                 .then(Commands.literal("add")
                     .executes(ctx -> addSpawnPoint(ctx, BlockPos.containing(ctx.getSource().getPosition())))
