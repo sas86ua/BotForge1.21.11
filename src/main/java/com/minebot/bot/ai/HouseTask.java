@@ -230,6 +230,13 @@ public class HouseTask extends Task {
             stage = Stage.MATERIALS;
             return Status.RUNNING;
         }
+        if (designQueue == null && !wentHome && !Home.isNear(bot, 16) && memory.home() != null) {
+            // (home first: the land round it has to be there to look over - from a trip it wasn't, and it settled for less)
+            wentHome = true;
+            BlockPos home = memory.home().pos();
+            child = new GoToTask(bot, Goal.column(home.getX(), home.getZ(), 6));
+            return Status.RUNNING;
+        }
         if (designQueue == null) {
             designQueue = new ArrayList<>();
             int wood = localWood();
@@ -435,6 +442,7 @@ public class HouseTask extends Task {
     private final Map<String, Integer> rejected = new java.util.TreeMap<>();
     /** Some spot was turned down for land not loaded: no settling for a simple plan then. */
     private boolean sawUnloaded;
+    private boolean wentHome;
 
     /** Floor height of the spot {@link #evaluate} last looked at. */
     private int candidateFloor;
