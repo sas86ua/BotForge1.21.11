@@ -90,10 +90,11 @@ public final class Stash {
         Inventory inventory = bot.getInventory();
         Map<Integer, Integer> result = new HashMap<>();
         Map<String, Integer> kept = new HashMap<>();
+        com.minebot.bot.craft.Target interrupted = bot.brain().interrupted();
         for (int slot = 0; slot < Inv.MAIN_SIZE; slot++) {
             ItemStack stack = inventory.getItem(slot);
-            if (stack.isEmpty()) {
-                continue;
+            if (stack.isEmpty() || interrupted != null && interrupted.accepts().test(stack)) {
+                continue; // (nor what the task it broke off was getting: it goes on with it after)
             }
             if (isTool(stack)) {
                 if (isSpare(bot, slot)) {

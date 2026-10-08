@@ -133,6 +133,13 @@ public class BotBrain {
             Needs.Need urgent = nextNeed();
             if (urgent != null && urgent != currentNeed && isMoreImportant(urgent, currentNeed)) {
                 bot.debug("switching to more urgent need: {}", urgent.id());
+                Target was = current.wanted();
+                if (was != null) {
+                    // (what it was getting stays in the bag meanwhile: "store" put the sand it had just
+                    // fetched back in the chest, the task fetched it again, and round it went)
+                    interrupted = was;
+                    interruptedUntil = bot.level().getGameTime() + INTERRUPTED_TICKS;
+                }
                 stopCurrent();
             }
         }
@@ -194,6 +201,15 @@ public class BotBrain {
         current = null;
         currentNeed = null;
     }
+
+    /** What the task a more urgent need cut short was getting (for a while after), or null. */
+    public @Nullable Target interrupted() {
+        return interrupted != null && bot.level().getGameTime() < interruptedUntil ? interrupted : null;
+    }
+
+    private static final int INTERRUPTED_TICKS = 20 * 60 * 2;
+    private @Nullable Target interrupted;
+    private long interruptedUntil;
 
     /** What the bot is trying to get right now, so other bots can help; null if nothing. */
     public @Nullable Target wanted() {
