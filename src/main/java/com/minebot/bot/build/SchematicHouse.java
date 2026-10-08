@@ -29,6 +29,7 @@ import java.util.function.Predicate;
 public final class SchematicHouse implements HousePlan {
     private final HouseSchematics.Design design;
     private final int wood;
+    private final boolean dwelling;
     private final BlockPos origin;
     private final Direction front;
     private final int steps;
@@ -41,6 +42,12 @@ public final class SchematicHouse implements HousePlan {
 
     /** @param wood which wood it's built of (see {@link HouseSchematics#WOODS}; 0: the plan's own) */
     public SchematicHouse(HouseSchematics.Design design, BlockPos origin, Direction front, int wood) {
+        this(design, origin, front, wood, true);
+    }
+
+    /** @param dwelling a house to live in (one bed: its own, and a crafting table), not a village's church or library */
+    public SchematicHouse(HouseSchematics.Design design, BlockPos origin, Direction front, int wood, boolean dwelling) {
+        this.dwelling = dwelling;
         this.wood = wood;
         this.design = design;
         this.origin = origin;
@@ -69,9 +76,9 @@ public final class SchematicHouse implements HousePlan {
                     }
                     states[i] = state;
                     if (state.is(BlockTags.BEDS)) {
-                        kinds[i] = bed ? ' ' : 'B'; // (one bed: the bot's own)
+                        kinds[i] = bed || !dwelling ? ' ' : 'B'; // (one bed: the bot's own; none in a church - no bot moves in)
                         bed = true;
-                    } else if (state.is(Blocks.CRAFTING_TABLE) && !table) {
+                    } else if (state.is(Blocks.CRAFTING_TABLE) && !table && dwelling) {
                         kinds[i] = 'T';
                         table = true;
                     } else {
@@ -82,7 +89,7 @@ public final class SchematicHouse implements HousePlan {
                 }
             }
         }
-        if (!bed || !table) {
+        if (dwelling && (!bed || !table)) {
             furnish(kinds, states, bed, table);
         }
         for (int y = 0; y < h; y++) {
@@ -273,7 +280,7 @@ public final class SchematicHouse implements HousePlan {
 
     @Override
     public HousePlan atFloor(int floorY) {
-        return new SchematicHouse(design, origin.atY(floorY - design.groundLayer()), front, wood);
+        return new SchematicHouse(design, origin.atY(floorY - design.groundLayer()), front, wood, dwelling);
     }
 
     @Override

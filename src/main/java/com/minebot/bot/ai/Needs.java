@@ -171,6 +171,9 @@ public final class Needs {
         new Need("house prep", HousePrepTask::wanted, HousePrepTask::new),
         // After 20-30 days in the first hut: a proper house next to it
         new Need("house", HouseTask::wanted, HouseTask::new),
+        // Then, the village's houses all built: its church and library, together (see Villages)
+        new Need("village build", bot -> !GreatBuildTask.isAway(bot) && !GreatBuildTask.sessionOn(bot) && VillageBuildTask.wanted(bot),
+            VillageBuildTask::new),
         // Then fields by the house: wheat, and potatoes / carrots if it has some
         new Need("farm", FarmTask::wanted, FarmTask::new),
         // Wheat from the fields (bag and chests): bread, three wheat a loaf

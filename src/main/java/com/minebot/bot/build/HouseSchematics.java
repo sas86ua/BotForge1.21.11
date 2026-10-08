@@ -42,9 +42,17 @@ public final class HouseSchematics {
 
     public static synchronized List<Design> all() {
         if (designs == null) {
+            designs = load("houses", FILES);
+        }
+        return designs;
+    }
+
+    /** Designs from the mod's own files (in {@code dir}: name, file name), those it can read. */
+    static List<Design> load(String dir, String[][] files) {
+        {
             List<Design> loaded = new ArrayList<>();
-            for (String[] file : FILES) {
-                try (InputStream in = HouseSchematics.class.getResourceAsStream("/houses/" + file[1])) {
+            for (String[] file : files) {
+                try (InputStream in = HouseSchematics.class.getResourceAsStream("/" + dir + "/" + file[1])) {
                     if (in == null) {
                         LOGGER.warn("House schematic {} missing", file[1]);
                         continue;
@@ -55,9 +63,8 @@ public final class HouseSchematics {
                     LOGGER.warn("Can't read house schematic {}", file[1], e);
                 }
             }
-            designs = List.copyOf(loaded);
+            return List.copyOf(loaded);
         }
-        return designs;
     }
 
     /** The highest layer that's mostly ground (dirt, grass: what's round the house): level with the land. */

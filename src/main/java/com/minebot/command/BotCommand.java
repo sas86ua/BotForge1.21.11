@@ -226,6 +226,22 @@ public final class BotCommand {
                 com.minebot.stats.ServerStats.post(ctx.getSource().getServer()); // (the hourly summary, now)
                 return 1;
             }))
+            .then(Commands.literal("village")
+                .then(Commands.literal("status").executes(BotCommand::villageStatus))
+                .then(Commands.literal("start").then(Commands.argument("bot", StringArgumentType.word())
+                    .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(BotManager.all().stream().map(BotPlayer::getPlainTextName), builder))
+                    .executes(ctx -> {
+                        String name = StringArgumentType.getString(ctx, "bot");
+                        for (BotPlayer bot : BotManager.all()) {
+                            if (bot.getPlainTextName().equalsIgnoreCase(name)) {
+                                com.minebot.bot.build.Villages.startNow(bot);
+                                reply(ctx, name + "'s village starts its next building now (houses or no houses)");
+                                return 1;
+                            }
+                        }
+                        ctx.getSource().sendFailure(Component.literal("No bot " + name));
+                        return 0;
+                    }))))
             .then(Commands.literal("house")
                 .then(Commands.literal("designs").executes(BotCommand::houseDesigns))
                 .then(Commands.literal("rebuild").then(Commands.argument("bot", StringArgumentType.word())
@@ -258,6 +274,36 @@ public final class BotCommand {
                         .executes(BotCommand::removeSpawnPoint)))
                 .then(Commands.literal("list")
                     .executes(BotCommand::listSpawnPoints))));
+    }
+
+    /** The bots' villages (on the server now): who's in each, ready to build or not, and their buildings. */
+    private static int villageStatus(CommandContext<CommandSourceStack> ctx) {
+        var server = ctx.getSource().getServer();
+        var villages = com.minebot.bot.build.Villages.get(server);
+        java.util.Set<BotMemory> seen = new java.util.HashSet<>();
+        StringBuilder text = new StringBuilder("Villages:");
+        for (BotPlayer bot : BotManager.all()) {
+            if (seen.contains(bot.memory()) || bot.memory().home() == null) {
+                continue;
+            }
+            var village = com.minebot.bot.build.Villages.villageOf(bot);
+            seen.addAll(village);
+            BlockPos middle = com.minebot.bot.build.Villages.middle(village);
+            text.append("\n ").append(village.stream().map(m -> m.name() + (m.houseDone()
+                    && com.minebot.bot.build.HousePlans.isSchematic(m.houseTemplate()) ? "*" : "")).toList())
+                .append(" middle ").append(pos(middle))
+                .append(com.minebot.bot.build.Villages.ready(village) ? ", ready" : ", not ready");
+            var current = villages.current(middle);
+            if (current != null) {
+                text.append(", building ").append(com.minebot.bot.build.Villages.name(current.building())).append(" at ").append(pos(current.origin()));
+            } else {
+                int next = villages.next(middle);
+                text.append(next >= 0 ? ", next: " + com.minebot.bot.build.Villages.name(next) : ", all built");
+            }
+        }
+        text.append("\n (* in a house of their own from the schematics)");
+        reply(ctx, text.toString());
+        return 1;
     }
 
     /** The schematic houses the bots build: size, ground, front, bed and table, and what they take. */
