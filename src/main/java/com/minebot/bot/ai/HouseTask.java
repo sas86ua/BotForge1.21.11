@@ -68,7 +68,7 @@ public class HouseTask extends Task {
     /** A batch of materials: at most this many stacks of them at a time (a big house doesn't fit in the bag). */
     private static final int BATCH_STACKS = 10;
     /** What it couldn't get for its house is left out for a day (then tried again). */
-    private static final long UNOBTAINABLE_TICKS = DAY;
+    private static final long UNOBTAINABLE_TICKS = DAY / 4;
     private static final Map<UUID, Map<Item, Long>> UNOBTAINABLE = new ConcurrentHashMap<>();
 
     private enum Stage { SITE, MATERIALS, CLEAR, FILL, BUILD, MOVE_BED, MOVE_TABLE, DONE }
@@ -170,6 +170,7 @@ public class HouseTask extends Task {
             child.stop();
             Task finished = child;
             child = null;
+            bot.setMiningRule(null);
             if (status == Status.FAILURE && stage == Stage.MATERIALS) {
                 if (plan != null && plan.fromSchematic() && getting != null) {
                     // (one thing it can't get - a dye, deepslate...: those blocks are left out for now, the rest goes on)
@@ -538,6 +539,7 @@ public class HouseTask extends Task {
             if (!need.satisfied(bot)) {
                 bot.debug("house needs {}", need);
                 getting = entry.getKey();
+                bot.setMiningRule(GreatBuildPrepTask.homeMine(bot)); // (stone and ore from its mine, not roaming the land for rock)
                 child = new ObtainTask(bot, need, 0);
                 return Status.RUNNING;
             }
@@ -957,6 +959,7 @@ public class HouseTask extends Task {
     public void stop() {
         breaker.cancel();
         bot.navigator().stop();
+        bot.setMiningRule(null);
         if (pillarLogging) {
             pillarLogging = false;
             bot.pillars().addAll(bot.navigator().stopPillarLog());

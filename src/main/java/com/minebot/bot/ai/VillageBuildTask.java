@@ -111,6 +111,7 @@ public class VillageBuildTask extends Task {
             if (status == Status.RUNNING) {
                 return Status.RUNNING;
             }
+            bot.setMiningRule(null);
             child.stop();
             child = null;
             if (status == Status.FAILURE && stage == Stage.MATERIALS) {
@@ -118,7 +119,7 @@ public class VillageBuildTask extends Task {
                     return Status.FAILURE;
                 }
                 bot.debug("village: can't get {}; others may", getting);
-                UNOBTAINABLE.computeIfAbsent(bot.getUUID(), u -> new ConcurrentHashMap<>()).put(getting, bot.level().getGameTime() + DAY);
+                UNOBTAINABLE.computeIfAbsent(bot.getUUID(), u -> new ConcurrentHashMap<>()).put(getting, bot.level().getGameTime() + DAY / 4);
                 getting = null;
                 return Status.RUNNING;
             }
@@ -335,6 +336,7 @@ public class VillageBuildTask extends Task {
             if (!need.satisfied(bot)) {
                 bot.debug("village: the {} needs {}", plan.name(), need);
                 getting = entry.getKey();
+                bot.setMiningRule(GreatBuildPrepTask.homeMine(bot)); // (stone and ore from its mine, not roaming the land for rock)
                 child = new ObtainTask(bot, need, 0);
                 return Status.RUNNING;
             }
@@ -533,6 +535,7 @@ public class VillageBuildTask extends Task {
     public void stop() {
         breaker.cancel();
         bot.navigator().stop();
+        bot.setMiningRule(null);
         if (child != null) {
             child.stop();
         }

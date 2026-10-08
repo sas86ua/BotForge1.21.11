@@ -78,6 +78,11 @@ public class GreatBuildPrepTask extends Task {
     }
 
     private MiningRule mine() {
+        return homeMine(bot);
+    }
+
+    /** Its own mine near home, well under the ground (for stone and ore: the land round stays as it was). */
+    static MiningRule homeMine(BotPlayer bot) {
         ServerLevel level = bot.level();
         MiningRule rule = MINES.get(bot.getUUID());
         BlockPos home = bot.memory().home() != null ? bot.memory().home().pos() : bot.blockPosition();
