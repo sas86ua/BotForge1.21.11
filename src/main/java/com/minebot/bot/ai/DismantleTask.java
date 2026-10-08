@@ -60,9 +60,21 @@ public class DismantleTask extends Task {
         // not loaded wait for it to come back (the list is kept)
         pillars.removeIf(pos -> com.minebot.bot.build.GreatBuild.nearSite(pos) || bot.level().isLoaded(pos) && (!isOurBlock(bot, pos)
             || !bot.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.LADDER) && (inShaft(bot, pos, pillars) || inWall(bot, pos))
-            || touchesWater(bot, pos)));
+            || touchesWater(bot, pos) || underground(bot, pos)));
         return pillars.stream().anyMatch(pos -> near(bot, pos));
     }
+
+    /**
+     * Well under the ground (a cave, a mine): nobody sees it there, and it's the way back up. Taking it down
+     * meant climbing out again on a new one, to be taken down again: down and up the shaft over and over.
+     */
+    private static boolean underground(BotPlayer bot, BlockPos pos) {
+        return pos.getY() < bot.level().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+            pos.getX(), pos.getZ()) - UNDERGROUND_DEPTH;
+    }
+
+    /** Blocks down from the surface where scaffolding is left as it is. */
+    private static final int UNDERGROUND_DEPTH = 6;
 
     private static boolean near(BotPlayer bot, BlockPos pos) {
         return bot.level().isLoaded(pos) && pos.closerThan(bot.blockPosition(), MAX_DISTANCE);
