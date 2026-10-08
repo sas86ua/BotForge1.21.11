@@ -64,6 +64,7 @@ public final class Stash {
     public static Map<Integer, Integer> disposable(BotPlayer bot) {
         Map<Integer, Integer> result = new HashMap<>();
         int seedsOver = -1; // (seeds over what's kept at home, bag and chests together; worked out when needed)
+        Map<net.minecraft.world.item.Item, Integer> foodOver = null; // (the same for bread, wheat, potatoes, carrots)
         for (Map.Entry<Integer, Integer> entry : toStore(bot).entrySet()) {
             ItemStack stack = bot.getInventory().getItem(entry.getKey());
             if (BULK.test(stack) && forGreatBuild(bot, stack)) {
@@ -79,6 +80,23 @@ public final class Stash {
                 if (over > 0) {
                     result.put(entry.getKey(), over);
                     seedsOver -= over;
+                }
+            } else if (JunkRunTask.isLimitedFood(stack)) {
+                // Over the stack kept (bag and chests together): taken out of the chests to be got rid of, it went
+                // straight back in ("store"), and out again, round and round
+                if (foodOver == null) {
+                    foodOver = new HashMap<>();
+                    for (Map.Entry<net.minecraft.world.item.Item, Integer> home : JunkRunTask.limitedFoodAtHome(bot).entrySet()) {
+                        net.minecraft.world.item.Item key = home.getKey();
+                        int inBag = Inv.count(bot, s -> JunkRunTask.isLimitedFood(s) && JunkRunTask.limitKey(s.getItem()) == key);
+                        foodOver.put(key, Math.max(0, home.getValue() + inBag - JunkRunTask.FOOD_KEEP));
+                    }
+                }
+                net.minecraft.world.item.Item key = JunkRunTask.limitKey(stack.getItem());
+                int over = Math.min(entry.getValue(), foodOver.getOrDefault(key, 0));
+                if (over > 0) {
+                    result.put(entry.getKey(), over);
+                    foodOver.merge(key, -over, Integer::sum);
                 }
             }
         }

@@ -122,6 +122,17 @@ public class JunkRunTask extends Task {
         return seeds;
     }
 
+    /** Bread, wheat, potatoes (with the baked ones) and carrots in all its chests, by {@link #limitKey}. */
+    static Map<Item, Integer> limitedFoodAtHome(BotPlayer bot) {
+        Map<Item, Integer> food = new HashMap<>();
+        for (Map.Entry<Item, Integer> entry : bulkAtHome(bot).entrySet()) {
+            if (isLimitedFood(new ItemStack(entry.getKey()))) {
+                food.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return food;
+    }
+
     /** Bulk blocks of each kind in all its chests. */
     private static Map<Item, Integer> bulkAtHome(BotPlayer bot) {
         Map<Item, Integer> bulk = new HashMap<>();
