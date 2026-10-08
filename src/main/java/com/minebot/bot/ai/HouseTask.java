@@ -245,12 +245,20 @@ public class HouseTask extends Task {
             index = -1;
         }
         if (index < 0) {
+            if (sawUnloaded) {
+                // (the land round it wasn't all there to look at - just logged in, say: some other time, not a lesser house for good)
+                bot.debug("house: couldn't see all the land round the hut; looking again later");
+                return Status.FAILURE;
+            }
             // No room for any of them: one of its own simple plans
             index = bot.getRandom().nextInt(HouseTemplates.ALL.size());
         }
+        rejected.clear();
         plan = findSite(index);
         if (plan == null) {
-            bot.debug("house: no good spot near the hut for a {}", HousePlans.create(index, BlockPos.ZERO, Direction.NORTH).name());
+            bot.debug("house: no good spot near the hut for a {}", HousePlans.create(index, BlockPos.ZERO, Direction.NORTH).name() + " " + rejected);
+            int unloaded = rejected.getOrDefault("not loaded", 0);
+            sawUnloaded |= unloaded * 2 > rejected.values().stream().mapToInt(Integer::intValue).sum(); // (mostly not there to see)
             return index < HousePlans.SCHEMATIC_BASE ? Status.FAILURE : Status.RUNNING;
         }
         memory.setHouseSite(plan.origin(), plan.front(), index);
@@ -345,10 +353,12 @@ public class HouseTask extends Task {
         // Keep away from the hut's walls
         if (o.getX() - HUT_SPACING <= hutMaxX && o.getX() + sx - 1 + HUT_SPACING >= hutMinX
             && o.getZ() - HUT_SPACING <= hutMaxZ && o.getZ() + sz - 1 + HUT_SPACING >= hutMinZ) {
+            rejected.merge("by the hut", 1, Integer::sum);
             return null;
         }
         for (int[] corner : new int[][] {{-1, -1}, {sx, -1}, {-1, sz}, {sx, sz}}) {
             if (level.getChunkSource().getChunkNow((o.getX() + corner[0]) >> 4, (o.getZ() + corner[1]) >> 4) == null) {
+                rejected.merge("not loaded", 1, Integer::sum);
                 return null;
             }
         }
@@ -365,15 +375,18 @@ public class HouseTask extends Task {
                 int top = ground(level, gx, gz) - 1;
                 int diff = Math.abs(top - floorY);
                 if (diff > (margin ? levelling + 1 : levelling)) {
+                    rejected.merge("too uneven", 1, Integer::sum);
                     return null;
                 }
                 cost += diff * stride * stride;
                 BlockPos column = new BlockPos(gx, floorY, gz);
                 if (!bot.memory().inZone(level.dimension(), column) || ProtectedAreas.isProtected(level, column)) {
+                    rejected.merge("out of zone or protected", 1, Integer::sum);
                     return null;
                 }
                 for (int y = floorY - 1; y <= floorY + 2; y++) {
                     if (!level.getFluidState(new BlockPos(gx, y, gz)).isEmpty()) {
+                        rejected.merge("water", 1, Integer::sum);
                         return null; // a pond, a river: not here
                     }
                 }
@@ -382,17 +395,24 @@ public class HouseTask extends Task {
         for (BlockPos pos : built) {
             if (pos.getX() >= o.getX() - 2 && pos.getX() <= o.getX() + sx + 1 && pos.getZ() >= o.getZ() - 2
                 && pos.getZ() <= o.getZ() + sz + 1 && pos.getY() >= floorY - 2) {
+                rejected.merge("built up", 1, Integer::sum);
                 return null; // something's built there already
             }
         }
         for (BotMemory other : BotRegistry.get(level.getServer()).all()) {
             if (other != bot.memory() && other.bed() != null && other.bed().closerThan(o.offset(sx / 2, 0, sz / 2), 16 + Math.max(sx, sz) / 2)) {
+                rejected.merge("another bot's bed", 1, Integer::sum);
                 return null;
             }
         }
         candidateFloor = floorY;
         return cost;
     }
+
+    /** Why spots were turned down (for the log). */
+    private final Map<String, Integer> rejected = new java.util.TreeMap<>();
+    /** Some spot was turned down for land not loaded: no settling for a simple plan then. */
+    private boolean sawUnloaded;
 
     /** Floor height of the spot {@link #evaluate} last looked at. */
     private int candidateFloor;

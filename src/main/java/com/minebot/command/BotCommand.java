@@ -236,7 +236,7 @@ public final class BotCommand {
                         for (BotPlayer bot : BotManager.all()) {
                             if (bot.getPlainTextName().equalsIgnoreCase(name)) {
                                 bot.memory().setRebuildAt(bot.level().getGameTime());
-                                if (!bot.memory().houseDone() && com.minebot.bot.build.HousePlans.isSchematic(bot.memory().houseTemplate())) {
+                                if (!bot.memory().houseDone() && bot.memory().houseOrigin() != null) {
                                     // (a schematic house planned and under way: planned afresh)
                                     bot.memory().setHouseSite(null, net.minecraft.core.Direction.NORTH, 0);
                                     bot.brain().reconsider();
