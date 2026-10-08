@@ -86,8 +86,13 @@ public class EscapeTask extends Task {
         if (!bot.navigator().isActive()) {
             bot.navigator().navigateEscape(Goal.surface(bot.level()));
         }
-        if (bot.navigator().tick().ended() && underground(bot) && ++failures > 3) {
-            // No way out at all (Makena sat two hours in a pocket of rock under her own house): it digs itself out
+        if (start == null) {
+            start = bot.blockPosition();
+        }
+        boolean ended = bot.navigator().tick().ended();
+        if (underground(bot) && (ended && ++failures > 3 || ticks > 20 * 40 && start != null && bot.blockPosition().closerThan(start, 4))) {
+            // No way out at all (Makena sat two hours in a pocket of rock under her own house; Steve got only part-ways
+            // to the surface each time and stood there, his way never quite "failing"): it digs itself out
             bot.debug("no way out of here; digging my way up");
             bot.navigator().stop();
             digOut = true;
@@ -97,6 +102,8 @@ public class EscapeTask extends Task {
     }
 
     private boolean digOut;
+    private @org.jetbrains.annotations.Nullable BlockPos start;
+    private @org.jetbrains.annotations.Nullable BlockPos pillarBase;
     private @org.jetbrains.annotations.Nullable Direction away;
 
     /**
@@ -134,7 +141,11 @@ public class EscapeTask extends Task {
             bot.controller().moveTowards(Vec3.atBottomCenterOf(ahead), false, false);
             return Status.RUNNING;
         }
-        BlockPos overHead = feet.above(2);
+        if (bot.onGround() || pillarBase == null) {
+            pillarBase = feet; // (where it stands: mid-jump its feet are a block up, and the block would never go in)
+        }
+        BlockPos base = pillarBase;
+        BlockPos overHead = base.above(2);
         if (!isOpen(level, overHead)) {
             if (!canBreak(level, overHead)) {
                 away = away == null ? Direction.NORTH : away.getClockWise();
@@ -145,11 +156,11 @@ public class EscapeTask extends Task {
             return Status.RUNNING;
         }
         // Pillar up: jump, and a block under its feet at the top of the jump
-        bot.controller().hold(Vec3.atBottomCenterOf(feet));
+        bot.controller().hold(Vec3.atBottomCenterOf(base));
         bot.setXRot(90.0F);
         bot.setJumping(true);
-        if (bot.getY() > feet.getY() + 0.9 && level.getBlockState(feet).canBeReplaced()) {
-            if (!com.minebot.bot.action.BlockPlacer.place(bot, feet, Inv::isScaffold) && Inv.count(bot, Inv::isScaffold) == 0) {
+        if (bot.getY() > base.getY() + 1.0 && level.getBlockState(base).canBeReplaced()) {
+            if (!com.minebot.bot.action.BlockPlacer.place(bot, base, Inv::isScaffold) && Inv.count(bot, Inv::isScaffold) == 0) {
                 return Status.FAILURE; // (nothing to stand on: not likely, it has dug enough)
             }
         }
