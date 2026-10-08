@@ -1087,7 +1087,29 @@ public final class GreatBuild extends SavedData {
             }
         }
         if (taker != null) {
-            orders.computeIfAbsent(taker.getUUID(), u -> new LinkedHashMap<>()).merge(key, missing, Integer::sum);
+            // A swap: the taker hands this one as much of something of its own order this one can get (stone
+            // bricks, say), so neither ends up with more or less to bring than before
+            Map<String, Integer> theirs = orders.computeIfAbsent(taker.getUUID(), u -> new LinkedHashMap<>());
+            String give = null;
+            int most = 0;
+            for (Map.Entry<String, Integer> entry : theirs.entrySet()) {
+                if (!entry.getKey().equals(key) && !cant.contains(entry.getKey()) && entry.getValue() > most) {
+                    give = entry.getKey();
+                    most = entry.getValue();
+                }
+            }
+            if (give != null) {
+                int swap = Math.min(missing, most);
+                if (most - swap > 0) {
+                    theirs.put(give, most - swap);
+                } else {
+                    theirs.remove(give);
+                }
+                own.merge(give, swap, Integer::sum);
+                LOGGER.info("Great build: {} takes {} {} from {}'s order in exchange", bot.getPlainTextName(), swap, give,
+                    taker.getPlainTextName());
+            }
+            theirs.merge(key, missing, Integer::sum);
             LOGGER.info("Great build: {} can't get {}; {} of it ordered from {} instead", bot.getPlainTextName(), key, missing,
                 taker.getPlainTextName());
         } else {
