@@ -310,7 +310,7 @@ public class Navigator {
         boolean boat = Inv.count(bot, stack -> stack.is(net.minecraft.tags.ItemTags.BOATS)) > 0
             || bot.getVehicle() instanceof net.minecraft.world.entity.vehicle.boat.AbstractBoat; // (in one: plan for it too)
         PathFinder.Options options = new PathFinder.Options(true, canPlace, maxNodes, zone, zoneRadius, avoid, boat, escape,
-            Inv.count(bot, stack -> stack.is(net.minecraft.world.item.Items.LADDER)) > 0, noLadder);
+            Inv.count(bot, stack -> stack.is(net.minecraft.world.item.Items.LADDER)), noLadder);
         search = new PathFinder(bot, feet(), goal, options);
         status = Status.SEARCHING;
     }
@@ -563,6 +563,19 @@ public class Navigator {
                 move(center, false);
             }
             case SWIM_UP, CLIMB_UP -> {
+                if (step.move() == Move.CLIMB_UP && !BlockRules.isClimbable(bot.level().getBlockState(from))
+                    && bot.level().getBlockState(from).canBeReplaced() && !bot.isInWater()) {
+                    // A rung missing where it stands (one taken down): put back, or there's no climbing on (Sunny stood in the
+                    // gap, the step timing out, way after way)
+                    net.minecraft.core.Direction wall = BlockRules.ladderWall(bot.level(), from);
+                    if (wall != null && Inv.count(bot, stack -> stack.is(net.minecraft.world.item.Items.LADDER)) > 0) {
+                        bot.controller().hold(Vec3.atBottomCenterOf(from));
+                        if (BlockPlacer.place(bot, from, stack -> stack.is(net.minecraft.world.item.Items.LADDER), wall)) {
+                            bot.debug("put back a missing rung at {}", from.toShortString());
+                        }
+                        return;
+                    }
+                }
                 bot.controller().hold(center);
                 bot.setJumping(true);
             }

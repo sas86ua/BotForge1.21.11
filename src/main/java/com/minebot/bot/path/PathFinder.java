@@ -35,7 +35,7 @@ public class PathFinder {
      */
     /** @param boat the bot carries a boat: open water is quick to cross */
     public record Options(boolean canBreak, boolean canPlace, int maxNodes, @Nullable BlockPos zoneCenter, int zoneRadius,
-                          LongSet avoid, boolean boat, boolean escape, boolean ladders, LongSet noLadder) {
+                          LongSet avoid, boolean boat, boolean escape, int ladders, LongSet noLadder) {
     }
 
     private static final double INF = Double.POSITIVE_INFINITY;
@@ -188,11 +188,11 @@ public class PathFinder {
         if (options.canPlace() && !inWater && (placedFloor || standable(x, y - 1, z)) && mayPlace(x, y, z)) {
             double clear = clearCost(x, y + 2, z);
             if (clear < INF) {
-                add(from, x, y + 1, z, PLACE + WALK + clear + (options.ladders() && nearBuilding(x, y, z) ? PLACE * 3 : 0), Move.PILLAR);
+                add(from, x, y + 1, z, PLACE + WALK + clear + (options.ladders() > 0 && nearBuilding(x, y, z) ? PLACE * 3 : 0), Move.PILLAR);
             }
         }
-        if (options.ladders() && !inWater && (from.move == Move.LADDER || standable(x, y - 1, z) || BlockRules.isClimbable(feet))
-            && ladderHere(x, y, z) && mayPlace(x, y, z) && !options.noLadder().contains(BlockPos.asLong(x, y, z))) {
+        if (options.ladders() > 0 && !inWater && (from.move == Move.LADDER || standable(x, y - 1, z) || BlockRules.isClimbable(feet))
+            && ladderHere(x, y, z) && mayPlace(x, y, z) && enoughLadders(from, x, y, z) && !options.noLadder().contains(BlockPos.asLong(x, y, z))) {
             // Up the wall of a building on a ladder (it stays there) rather than a pillar beside it
             add(from, x, y + 1, z, CLIMB + LADDER_COST, Move.LADDER);
         }
@@ -284,6 +284,25 @@ public class PathFinder {
             return false; // (a torch on the wall there: passable, but no ladder goes in its place)
         }
         return BlockRules.ladderWall(level, new BlockPos(x, y, z)) != null;
+    }
+
+    /**
+     * Ladders enough in the bag for the climb so far and this step too (a ladder already there needs none): one short,
+     * it was stuck up the wall, the last block to the top with no rung, nothing to climb off it by.
+     */
+    private boolean enoughLadders(Node from, int x, int y, int z) {
+        int needed = (isLadder(x, y, z) ? 0 : 1) + (isLadder(x, y + 1, z) ? 0 : 1);
+        for (Node n = from; n != null && n.move == Move.LADDER; n = n.parent) {
+            if (!isLadder(n.x, n.y - 1, n.z)) {
+                needed++;
+            }
+        }
+        return needed <= options.ladders();
+    }
+
+    private boolean isLadder(int x, int y, int z) {
+        BlockState state = state(x, y, z);
+        return state != null && state.is(net.minecraft.world.level.block.Blocks.LADDER);
     }
 
     /** Can a rung go here: a ladder already, or room for one (air, grass, water)? */
