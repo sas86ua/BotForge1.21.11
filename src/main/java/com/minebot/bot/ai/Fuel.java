@@ -36,7 +36,53 @@ public final class Fuel {
             // Only tools it has a better one of (the old wooden pickaxe...)
             return Stash.isTool(stack) && Stash.isSpare(bot, slot);
         }
-        return !isNeeded(stack);
+        return isSurplusFurniture(bot, stack) || !isNeeded(stack);
+    }
+
+    /** Chests, crafting tables and wooden doors kept (bag and chests at home together): more than this burns. */
+    private static final int[] RESERVE = {8, 2, 4};
+    private static final int SURPLUS_TICKS = 20 * 10;
+    private static final java.util.Map<java.util.UUID, long[]> SURPLUS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static int furnitureKind(ItemStack stack) {
+        return stack.is(Items.CHEST) ? 0 : stack.is(Items.CRAFTING_TABLE) ? 1 : stack.is(ItemTags.WOODEN_DOORS) ? 2 : -1;
+    }
+
+    /**
+     * A chest, crafting table or wooden door over what it keeps (a loop once had a bot make 157 chests and
+     * 199 doors): fuel, burnt before coal - and fetched from the chests like saplings when it's short.
+     */
+    public static boolean isSurplusFurniture(BotPlayer bot, ItemStack stack) {
+        int kind = furnitureKind(stack);
+        if (kind < 0) {
+            return false;
+        }
+        long now = bot.level().getGameTime();
+        long[] cached = SURPLUS.get(bot.getUUID());
+        if (cached == null || now - cached[0] > SURPLUS_TICKS) {
+            long[] have = new long[4];
+            have[0] = now;
+            for (int slot = 0; slot < Inv.MAIN_SIZE; slot++) {
+                ItemStack item = bot.getInventory().getItem(slot);
+                int k = furnitureKind(item);
+                if (k >= 0) {
+                    have[k + 1] += item.getCount();
+                }
+            }
+            for (net.minecraft.core.BlockPos pos : bot.memory().chests()) {
+                if (bot.level().isLoaded(pos) && bot.level().getBlockEntity(pos) instanceof net.minecraft.world.Container chest) {
+                    for (int i = 0; i < chest.getContainerSize(); i++) {
+                        int k = furnitureKind(chest.getItem(i));
+                        if (k >= 0) {
+                            have[k + 1] += chest.getItem(i).getCount();
+                        }
+                    }
+                }
+            }
+            cached = have;
+            SURPLUS.put(bot.getUUID(), cached);
+        }
+        return cached[kind + 1] > RESERVE[kind];
     }
 
     /** Burnable things that have a better use. */

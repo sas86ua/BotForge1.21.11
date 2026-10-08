@@ -117,6 +117,9 @@ public final class Stash {
             if (GreatBuildTask.sessionOn(bot) && (forGreatBuild(bot, stack) || isBuildMaterial(bot, stack))) {
                 continue; // (packed for the Great Build: it goes along, not back in the chest)
             }
+            if (forHouse(bot, stack)) {
+                continue; // (a door, a chest, a window got ready for the house it's building: put away, it made another, 66 doors)
+            }
             if (isTool(stack)) {
                 if (isSpare(bot, slot)) {
                     result.put(slot, stack.getCount()); // spare, worse tools
@@ -136,6 +139,19 @@ public final class Stash {
             }
         }
         return result;
+    }
+
+    /** One of the made pieces of the house it's building (doors, chests, table, smoker, bed, windows, torches). */
+    private static boolean forHouse(BotPlayer bot, ItemStack stack) {
+        if (bot.memory().houseOrigin() == null || bot.memory().houseDone()) {
+            return false;
+        }
+        for (char kind : "DHTSBGt".toCharArray()) {
+            if (com.minebot.bot.build.Blueprint.material(kind).test(stack)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isBuildMaterial(BotPlayer bot, ItemStack stack) {

@@ -50,6 +50,7 @@ public class SmeltTask extends Task {
     private boolean placedFurnace;
     /** Looked in the chest for saplings to burn (once). */
     private boolean saplingsTaken;
+    private boolean surplusTaken;
     /** Someone else's furnace: take only our own output, leave their fuel. */
     private boolean foreign;
     private @Nullable Task child;
@@ -139,6 +140,18 @@ public class SmeltTask extends Task {
                 // (half an item each: as much as the batch takes, a stack and a half at most)
                 int wanted = Math.min(stored, Math.min(96, burnNeeded / 100 + 1));
                 child = ChestTask.withdraw(bot, new Target("kindling", kindling, Inv.count(bot, kindling) + wanted));
+                return Status.RUNNING;
+            }
+        }
+        if (burnNeeded > 0 && !surplusTaken && Home.isNear(bot, 32)) {
+            // Chests, crafting tables and doors made over what it keeps: burnt too (a chest burns as long as a log)
+            surplusTaken = true;
+            Predicate<ItemStack> surplus = stack -> Fuel.isSurplusFurniture(bot, stack);
+            int stored = ChestTask.stored(bot, new Target("spare furniture", surplus, 1));
+            if (stored > 0) {
+                furnishing = true; // (a side errand: no matter if it fails)
+                int wanted = Math.min(stored, Math.min(64, burnNeeded / 250 + 1));
+                child = ChestTask.withdraw(bot, new Target("spare furniture", surplus, Inv.count(bot, surplus) + wanted));
                 return Status.RUNNING;
             }
         }
