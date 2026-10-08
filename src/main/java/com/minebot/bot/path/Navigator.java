@@ -255,6 +255,11 @@ public class Navigator {
                 // (a bot in a boat can't walk: it sat there, the step timing out, path after path)
                 boat = riding;
             }
+            if (boat != null && path != null && (waterAhead(path, 1) < BOAT_WATER || path.steps().stream().anyMatch(step -> step.move() == Move.SWIM_DOWN))) {
+                // Only a little way, or down under the water: out of the boat to swim (from a boat it can't dive, nor
+                // step off the very block it's to build on - it sat there till the job timed out)
+                leaveBoat();
+            }
             if (boat != null) {
                 restartBoatRun();
             }

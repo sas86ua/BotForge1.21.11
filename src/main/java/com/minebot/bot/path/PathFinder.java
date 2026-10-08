@@ -466,6 +466,9 @@ public class PathFinder {
                 return false; // no shafts or tunnels under or right by its own house
             }
         }
+        // (at the Great Build the ground is all next to building blocks and the cobblestone filling it in: digging
+        // there is fine - Tuff stood walled in in a hole in the floor; the building's own blocks are no ground anyway)
+        boolean site = com.minebot.bot.build.GreatBuild.nearSite(cursor.set(x, y, z));
         for (Direction direction : Direction.values()) {
             BlockState neighbour = state(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ());
             if (neighbour == null) {
@@ -473,7 +476,7 @@ public class PathFinder {
             }
             // No digging into or under a building (a house dug into a hill, a basement):
             // the way in is the door
-            if (BlockRules.isBuilt(neighbour)) {
+            if (!site && BlockRules.isBuilt(neighbour)) {
                 return false;
             }
             if (direction != Direction.DOWN && !neighbour.getFluidState().isEmpty() && !options.escape()) {
