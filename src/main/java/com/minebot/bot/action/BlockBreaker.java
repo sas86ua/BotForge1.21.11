@@ -79,7 +79,9 @@ public class BlockBreaker {
                 return Result.RUNNING;
             }
         }
-        airTicks = 0;
+        if (bot.onGround()) {
+            airTicks = 0; // (not after waiting it out: a tick of digging, then waiting all over again)
+        }
         if (!bot.isWithinBlockInteractionRange(target, 0.5)) {
             cancel();
             return Result.FAILED;

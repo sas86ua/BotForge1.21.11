@@ -729,6 +729,9 @@ public class GreatBuildTask extends Task {
         return true;
     }
 
+    /** Ticks in the air on the way to a job (a hop, a fall), waited out before going on with it. */
+    private int airTicks;
+
     private Status doJob(GreatBuild build) {
         ServerLevel level = bot.level();
         GreatBuild.Job current = job;
@@ -738,6 +741,20 @@ public class GreatBuildTask extends Task {
             build.done(level, current);
             job = null;
             return Status.RUNNING;
+        }
+        if (!bot.onGround() && !bot.isInWater() && !bot.onClimbable() && bot.getVehicle() == null && airTicks++ < 40) {
+            // Mid-hop: what it sees and reaches from up there is no guide - at the top of a step up it "saw" the block,
+            // stopped the way short, fell back, lost sight of it and set off again, hopping on the spot till the job
+            // timed out (Calcite). On with the way, or down first
+            if (bot.navigator().isActive()) {
+                bot.navigator().tick();
+            } else {
+                bot.setJumping(false);
+            }
+            return Status.RUNNING;
+        }
+        if (bot.onGround()) {
+            airTicks = 0;
         }
         if (++jobTicks > JOB_TICKS) {
             bot.debug("great build: leaving {} at {} for later", current.type(), pos.toShortString());
