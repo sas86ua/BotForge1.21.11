@@ -80,11 +80,78 @@ public class EscapeTask extends Task {
             bot.navigator().stop();
             return swim();
         }
+        if (digOut) {
+            return digOut();
+        }
         if (!bot.navigator().isActive()) {
             bot.navigator().navigateEscape(Goal.surface(bot.level()));
         }
         if (bot.navigator().tick().ended() && underground(bot) && ++failures > 3) {
-            return Status.FAILURE;
+            // No way out at all (Makena sat two hours in a pocket of rock under her own house): it digs itself out
+            bot.debug("no way out of here; digging my way up");
+            bot.navigator().stop();
+            digOut = true;
+            failures = 0;
+        }
+        return Status.RUNNING;
+    }
+
+    private boolean digOut;
+    private @org.jetbrains.annotations.Nullable Direction away;
+
+    /**
+     * Digging out by hand, as a player would: under its own house (or near it) first a tunnel away from
+     * it, not up through its floor; then straight up - the block over its head broken, a block put under
+     * its feet as it jumps - till the sky is over it.
+     */
+    private Status digOut() {
+        ServerLevel level = bot.level();
+        BlockPos feet = bot.blockPosition();
+        BlockPos home = bot.memory().home() != null && bot.memory().home().dimension() == level.dimension() ? bot.memory().home().pos() : null;
+        boolean nearHome = home != null && Math.abs(feet.getX() - home.getX()) <= 10 && Math.abs(feet.getZ() - home.getZ()) <= 10;
+        if (nearHome) {
+            if (away == null) {
+                int dx = feet.getX() - home.getX();
+                int dz = feet.getZ() - home.getZ();
+                away = dx == 0 && dz == 0 ? Direction.NORTH
+                    : Math.abs(dx) >= Math.abs(dz) ? (dx > 0 ? Direction.EAST : Direction.WEST) : (dz > 0 ? Direction.SOUTH : Direction.NORTH);
+            }
+            BlockPos ahead = feet.relative(away);
+            for (BlockPos pos : new BlockPos[] {ahead.above(), ahead}) {
+                if (!isOpen(level, pos)) {
+                    if (!canBreak(level, pos) && !(level.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.AbstractFurnaceBlock)) {
+                        away = away.getClockWise(); // (something it mustn't break: another way)
+                        return ++failures > 12 ? Status.FAILURE : Status.RUNNING;
+                    }
+                    bot.controller().lookAt(Vec3.atCenterOf(pos));
+                    breaker.start(pos);
+                    return Status.RUNNING;
+                }
+            }
+            if (isOpen(level, ahead.below())) {
+                Inv.select(bot, Inv::isScaffold); // (a floor to walk on over a gap)
+            }
+            bot.controller().moveTowards(Vec3.atBottomCenterOf(ahead), false, false);
+            return Status.RUNNING;
+        }
+        BlockPos overHead = feet.above(2);
+        if (!isOpen(level, overHead)) {
+            if (!canBreak(level, overHead)) {
+                away = away == null ? Direction.NORTH : away.getClockWise();
+                return ++failures > 12 ? Status.FAILURE : Status.RUNNING;
+            }
+            bot.controller().lookAt(Vec3.atCenterOf(overHead));
+            breaker.start(overHead);
+            return Status.RUNNING;
+        }
+        // Pillar up: jump, and a block under its feet at the top of the jump
+        bot.controller().hold(Vec3.atBottomCenterOf(feet));
+        bot.setXRot(90.0F);
+        bot.setJumping(true);
+        if (bot.getY() > feet.getY() + 0.9 && level.getBlockState(feet).canBeReplaced()) {
+            if (!com.minebot.bot.action.BlockPlacer.place(bot, feet, Inv::isScaffold) && Inv.count(bot, Inv::isScaffold) == 0) {
+                return Status.FAILURE; // (nothing to stand on: not likely, it has dug enough)
+            }
         }
         return Status.RUNNING;
     }

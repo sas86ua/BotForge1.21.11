@@ -43,8 +43,15 @@ public class FuelFurnacesTask extends Task {
         furnaces.addAll(needCare(bot));
     }
 
+    /** When each bot next looks (after a round, whether it got to them or not: no going round and round). */
+    private static final java.util.Map<java.util.UUID, Long> NEXT = new java.util.concurrent.ConcurrentHashMap<>();
+
     public static boolean wanted(BotPlayer bot) {
-        return Home.isNear(bot, 32) && bot.every("furnace care", CHECK_TICKS, () -> !needCare(bot).isEmpty());
+        long now = bot.level().getGameTime();
+        if (!Home.isNear(bot, 32) || now < NEXT.getOrDefault(bot.getUUID(), 0L)) {
+            return false;
+        }
+        return bot.every("furnace care", CHECK_TICKS, () -> !needCare(bot).isEmpty());
     }
 
     /** How many of this fuel it can put in a furnace's store (keeping some coal and wood in the bag). */
@@ -97,7 +104,8 @@ public class FuelFurnacesTask extends Task {
             child = null;
         }
         if (furnaces.isEmpty()) {
-            bot.every("furnace care", 0, () -> false); // (looked at again next time round)
+            NEXT.put(bot.getUUID(), bot.level().getGameTime() + CHECK_TICKS);
+            bot.every("furnace care", 0, () -> false);
             return Status.SUCCESS;
         }
         if (!fetched) {

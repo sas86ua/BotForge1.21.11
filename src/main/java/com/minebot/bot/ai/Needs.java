@@ -80,6 +80,10 @@ public final class Needs {
         obtain("new sword", bot -> Tools.needsReplacing(bot, ItemTags.SWORDS), bot -> Tools.replacement(bot, ItemTags.SWORDS)),
         obtain("new pickaxe", bot -> Tools.needsReplacing(bot, ItemTags.PICKAXES), bot -> Tools.replacement(bot, ItemTags.PICKAXES)),
         obtain("new axe", bot -> Tools.needsReplacing(bot, ItemTags.AXES), bot -> Tools.replacement(bot, ItemTags.AXES)),
+        obtain("new shovel", bot -> Tools.needsReplacing(bot, ItemTags.SHOVELS), bot -> Tools.replacement(bot, ItemTags.SHOVELS)),
+        // At the Great Build with no shovel left (worn out digging the site): a stone one, there and then
+        obtain("shovel", bot -> GreatBuildTask.isAway(bot) && !Tools.has(bot, ItemTags.SHOVELS, Tools.Tier.STONE),
+            bot -> Tools.target(ItemTags.SHOVELS, Tools.Tier.STONE)),
         // A boat to carry, for crossing seas: made from wood, or a free one from within 128 blocks
         new Need("boat", bot -> !BoatTask.hasBoat(bot) && !bot.isPassenger() && !bot.isInWater() // (not out of its own boat mid-crossing)
                 && bot.every("boat", STOCK_CHECK, () -> BoatTask.canMake(bot) || BoatTask.freeBoat(bot) != null),
