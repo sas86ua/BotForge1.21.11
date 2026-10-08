@@ -208,7 +208,7 @@ public class PathFinder {
             // Only up through water: a swimmer floats with its feet in the top water block
             // and can't rise into the air above it to climb a ledge from there
             BlockState above = state(x, y + 1, z);
-            if (above != null && BlockRules.isWater(above)) {
+            if (above != null && BlockRules.isWater(above) && (options.escape() || !falling(above))) {
                 add(from, x, y + 1, z, SWIM, Move.SWIM_UP);
             }
             BlockState below = state(x, y - 1, z);
@@ -308,6 +308,16 @@ public class PathFinder {
     /** Can a rung go here: a ladder already, or room for one (air, grass, water)? */
     private static boolean rungFits(@Nullable BlockState state) {
         return state != null && (state.is(net.minecraft.world.level.block.Blocks.LADDER) || state.canBeReplaced());
+    }
+
+    /**
+     * Water falling down (a waterfall, a stream down a shaft): no swimming up it - the current took the bot back down
+     * time after time (Lapis, a day under its house); steps dug up the rock beside it instead.
+     */
+    private static boolean falling(BlockState state) {
+        var fluid = state.getFluidState();
+        return !fluid.isSource() && fluid.hasProperty(net.minecraft.world.level.material.FlowingFluid.FALLING)
+            && fluid.getValue(net.minecraft.world.level.material.FlowingFluid.FALLING);
     }
 
     /** Swimming with the head under water costs breath: strongly prefer the surface. */
