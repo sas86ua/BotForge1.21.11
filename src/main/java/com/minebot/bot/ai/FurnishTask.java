@@ -242,6 +242,19 @@ public class FurnishTask extends Task {
             if (spot == null && spare && toWorkshop && bot.memory().bed() != null) {
                 spot = findWorkshopSpot(level, bot.memory().bed(), item); // (the workshop is full: in the house then)
             }
+            if (spot == null && workshop != null && !toWorkshop) {
+                spot = findWorkshopSpot(level, workshop, item); // (no room by the bed: in the workshop, or the yard)
+            }
+            if (spot == null && workshop == null && !bot.memory().houseDone() && bot.memory().bed() != null) {
+                // A bed in someone else's house (a village's) with no room in it for its things: a yard of its own
+                // out by it, as its workshop, till it builds a house (Obsidian went a day without chest or furnace)
+                BlockPos yard = yardSpot(level, bot.memory().bed());
+                if (yard != null) {
+                    bot.debug("no room in the house; my things go in a yard by it, at {}", yard.toShortString());
+                    bot.memory().setWorkshop(yard);
+                    spot = findWorkshopSpot(level, yard, item);
+                }
+            }
             if (spot == null) {
                 bot.debug("no room for a {} at home", item);
                 return Status.FAILURE;
@@ -282,6 +295,33 @@ public class FurnishTask extends Task {
             return Status.FAILURE;
         }
         return Status.RUNNING;
+    }
+
+    /**
+     * Open ground near the house (under the sky, out of it), with room round it for a few things:
+     * the nearest such spot 3-10 blocks from the bed, about its level; null if there's none.
+     */
+    private static @Nullable BlockPos yardSpot(ServerLevel level, BlockPos bed) {
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (BlockPos pos : BlockPos.betweenClosed(bed.offset(-10, -3, -10), bed.offset(10, 3, 10))) {
+            double distance = pos.distSqr(bed);
+            if (distance < 9 || distance >= bestDistance || !level.canSeeSky(pos) || !PlaceSpots.isFreeGroundSpot(level, pos)
+                || nextToDoor(level, pos)) {
+                continue;
+            }
+            int free = 0;
+            for (BlockPos near : BlockPos.betweenClosed(pos.offset(-2, 0, -2), pos.offset(2, 0, 2))) {
+                if (level.canSeeSky(near) && PlaceSpots.isFreeGroundSpot(level, near)) {
+                    free++;
+                }
+            }
+            if (free >= 12) {
+                best = pos.immutable();
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
     /**
