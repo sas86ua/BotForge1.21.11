@@ -147,18 +147,32 @@ public class GreatBuildTask extends Task {
         if (now < nextChestAt || Inv.count(bot, DUG) == 0) {
             return null;
         }
-        BlockPos chest = build.campChest(bot);
+        // A chest of its camp with room; else any camp's nearby with room; else one more at its camp
+        BlockPos chest = null;
+        for (BlockPos pos : build.campChests(bot)) {
+            if (level.getBlockEntity(pos) instanceof ChestBlockEntity entity && hasRoom(entity)) {
+                chest = pos;
+                break;
+            }
+        }
+        BlockPos spot = chest == null ? build.nextCampChestSpot(bot) : null;
+        if (chest == null && spot == null) {
+            double best = (double) CHEST_RANGE * CHEST_RANGE;
+            for (BlockPos pos : build.allCampChests(level)) {
+                if (pos.distSqr(bot.blockPosition()) < best && level.getBlockEntity(pos) instanceof ChestBlockEntity entity && hasRoom(entity)) {
+                    chest = pos;
+                    best = pos.distSqr(bot.blockPosition());
+                }
+            }
+        }
         if (chest != null) {
             nextChestAt = now + CHEST_RETRY_TICKS;
-            if (!(level.getBlockEntity(chest) instanceof ChestBlockEntity entity) || !hasRoom(entity)) {
-                return null; // (full: it fills and builds with what it carries meanwhile)
-            }
             child = CampChestTask.put(bot, chest, DUG);
             return Status.RUNNING;
         }
-        BlockPos spot = build.campChestSpot(bot);
         if (spot == null) {
-            return null;
+            nextChestAt = now + CHEST_RETRY_TICKS;
+            return null; // (all full, and no more room for chests: it fills and builds with what it carries meanwhile)
         }
         if (Inv.count(bot, stack -> stack.is(Items.CHEST)) == 0) {
             nextChestAt = now + CHEST_RETRY_TICKS; // (if it can't make one: tried again later)
@@ -222,7 +236,7 @@ public class GreatBuildTask extends Task {
         Predicate<ItemStack> useful = stack -> build.isMaterial(stack.getItem()) || GreatBuild.FILL.test(stack);
         BlockPos best = null;
         double bestDistance = (double) CHEST_RANGE * CHEST_RANGE;
-        for (BlockPos pos : build.allCampChests()) {
+        for (BlockPos pos : build.allCampChests(level)) {
             double distance = pos.distSqr(bot.blockPosition());
             if (distance < bestDistance && level.isLoaded(pos) && level.getBlockEntity(pos) instanceof ChestBlockEntity chest
                 && Stash.count(chest, useful) > 0) {
@@ -239,6 +253,37 @@ public class GreatBuildTask extends Task {
 
     /** Camp chests this close are used. */
     private static final int CHEST_RANGE = 96;
+    /** Under this much dirt and cobblestone in the bag, a builder takes some out of a camp chest (the digger's). */
+    private static final int FILL_LOW = 32;
+    private static final int FILL_TAKE = 3 * 64;
+    private static final int FILL_CHECK_TICKS = 20 * 60;
+    private long nextFillAt;
+
+    /** Next to no dirt or cobblestone to fill holes with: 2-3 stacks out of the nearest camp chest that has some. */
+    private boolean takeFill(GreatBuild build) {
+        ServerLevel level = bot.level();
+        long now = level.getGameTime();
+        if (now < nextFillAt || Inv.count(bot, GreatBuild.FILL) >= FILL_LOW || Inv.freeSlots(bot) < 6) {
+            return false;
+        }
+        nextFillAt = now + FILL_CHECK_TICKS;
+        BlockPos best = null;
+        double bestDistance = (double) CHEST_RANGE * CHEST_RANGE;
+        for (BlockPos pos : build.allCampChests(level)) {
+            double distance = pos.distSqr(bot.blockPosition());
+            if (distance < bestDistance && level.isLoaded(pos) && level.getBlockEntity(pos) instanceof ChestBlockEntity chest
+                && Stash.count(chest, GreatBuild.FILL) >= FILL_LOW) {
+                best = pos;
+                bestDistance = distance;
+            }
+        }
+        if (best == null) {
+            return false;
+        }
+        bot.debug("great build: out of dirt to fill with; some from the camp chest at {}", best.toShortString());
+        child = CampChestTask.take(bot, best, GreatBuild.FILL, Math.min(FILL_TAKE, (Inv.freeSlots(bot) - 3) * 64));
+        return true;
+    }
 
     /** Camp furnaces are looked at this often, and only those this close. */
     private static final int OUTPUT_CHECK_TICKS = 20 * 30;
@@ -503,6 +548,9 @@ public class GreatBuildTask extends Task {
         }
         if (job == null) {
             boolean digger = isDigger(bot);
+            if (!digger && takeFill(build)) {
+                return Status.RUNNING; // (what the digger dug, to fill the holes with)
+            }
             int dug = digger ? Inv.count(bot, DUG) : 0;
             if (digger && (dug >= DUMP_LOAD || Inv.freeSlots(bot) < 3 && !Stash.makeRoom(bot, 3, false) && dug >= DUMP_MIN)) {
                 // Bag full of what it dug (rubbish proper thrown out first): into the camp chest in one go, to dig

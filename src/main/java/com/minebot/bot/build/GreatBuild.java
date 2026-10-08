@@ -887,9 +887,68 @@ public final class GreatBuild extends SavedData {
         setDirty();
     }
 
-    /** Every camp's chest: anyone at the site may put in or take out (it's all for the build). */
-    public java.util.Collection<BlockPos> allCampChests() {
-        return campChest.values();
+    /**
+     * Where a camp's chests go, in front of its fire: the first, then one beside it (a double chest), then
+     * the next row - three double chests at most.
+     */
+    private static final int[][] CAMP_CHESTS = {{0, 2}, {1, 2}, {0, 3}, {1, 3}, {0, 4}, {1, 4}};
+
+    /** The chest spots of the camp round this fire (on the ground there). */
+    private static List<BlockPos> chestSpots(ServerLevel level, BlockPos fire) {
+        List<BlockPos> spots = new ArrayList<>();
+        for (int[] offset : CAMP_CHESTS) {
+            spots.add(level.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                fire.offset(offset[0], 0, offset[1])));
+        }
+        return spots;
+    }
+
+    /** The chests standing at this bot's camp now. */
+    public List<BlockPos> campChests(BotPlayer bot) {
+        List<BlockPos> result = new ArrayList<>();
+        BlockPos fire = campCentre(bot);
+        if (fire == null || !bot.level().isLoaded(fire)) {
+            return result;
+        }
+        for (BlockPos spot : chestSpots(bot.level(), fire)) {
+            // (the ground's top is the chest itself where one stands)
+            BlockPos chest = spot.below();
+            if (bot.level().getBlockState(chest).is(Blocks.CHEST)) {
+                result.add(chest);
+            }
+        }
+        return result;
+    }
+
+    /** Where this bot's next camp chest goes (beside its last, for a double chest), or null if the camp has all of them. */
+    public @Nullable BlockPos nextCampChestSpot(BotPlayer bot) {
+        BlockPos fire = campCentre(bot);
+        if (fire == null || !bot.level().isLoaded(fire)) {
+            return null;
+        }
+        for (BlockPos spot : chestSpots(bot.level(), fire)) {
+            if (!bot.level().getBlockState(spot.below()).is(Blocks.CHEST)) {
+                return spot;
+            }
+        }
+        return null;
+    }
+
+    /** Every camp's chests: anyone at the site may put in or take out (it's all for the build). */
+    public List<BlockPos> allCampChests(ServerLevel level) {
+        java.util.Set<BlockPos> result = new java.util.LinkedHashSet<>(campChest.values());
+        for (List<BlockPos> one : camp.values()) {
+            if (one.isEmpty() || !level.isLoaded(one.get(0))) {
+                continue;
+            }
+            for (BlockPos spot : chestSpots(level, one.get(0))) {
+                if (level.getBlockState(spot.below()).is(Blocks.CHEST)) {
+                    result.add(spot.below());
+                }
+            }
+        }
+        result.removeIf(pos -> level.isLoaded(pos) && !level.getBlockState(pos).is(Blocks.CHEST));
+        return new ArrayList<>(result);
     }
 
     /** This bot's furnaces at its camp (those still standing). */
