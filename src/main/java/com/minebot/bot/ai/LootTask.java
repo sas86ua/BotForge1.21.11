@@ -43,8 +43,13 @@ public class LootTask extends Task {
         UNREACHABLE.remove(bot);
     }
 
-    private final @Nullable ItemEntity target;
+    /** At the Great Build: only what lies this close, and one go picks up a run of it (see tick). */
+    private static final int SITE_RANGE = 10;
+    private static final int SITE_CHAIN = 12;
+
+    private @Nullable ItemEntity target;
     private int ticks;
+    private int chain;
 
     public LootTask(BotPlayer bot) {
         super(bot);
@@ -61,7 +66,9 @@ public class LootTask extends Task {
             return null;
         }
         Set<UUID> unreachable = UNREACHABLE.getOrDefault(bot.getUUID(), Set.of());
-        AABB area = bot.getBoundingBox().inflate(ARMOR_RANGE, 8, ARMOR_RANGE);
+        boolean site = GreatBuildTask.isAway(bot);
+        int range = site ? SITE_RANGE : ARMOR_RANGE; // (no far trips for armour mid-session)
+        AABB area = bot.getBoundingBox().inflate(range, 8, range);
         return bot.level().getEntitiesOfClass(ItemEntity.class, area, item -> item.isAlive()
                 && item.getAge() > FRESH_TICKS // just dropped: the task that mined it picks it up
                 && !item.isInWater() // no diving after it
@@ -102,6 +109,15 @@ public class LootTask extends Task {
     @Override
     public Status tick() {
         if (target == null || !target.isAlive()) {
+            if (target != null && chain < SITE_CHAIN && GreatBuildTask.isAway(bot)) {
+                // At the site the drops lie thick (the diggers'): the next one at once, not off to the job and back for each
+                target = find(bot);
+                if (target != null) {
+                    chain++;
+                    bot.navigator().stop();
+                    return Status.RUNNING;
+                }
+            }
             return Status.SUCCESS; // picked up (by us or someone else)
         }
         if (!bot.navigator().isActive()) {
