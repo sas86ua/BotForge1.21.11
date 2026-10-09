@@ -184,6 +184,8 @@ public final class Needs {
         new Need("trail", bot -> !GreatBuildTask.isAway(bot) && !GreatBuildTask.sessionOn(bot) && TrailTask.wanted(bot), TrailTask::new),
         // Then fields by the house: wheat, and potatoes / carrots if it has some
         new Need("farm", FarmTask::wanted, FarmTask::new),
+        // And a sheep pen: wool (the Great Build asks for a lot) and mutton
+        new Need("sheep pen", SheepPenTask::wanted, SheepPenTask::new),
         // Wheat from the fields (bag and chests): bread, three wheat a loaf
         // Potatoes beyond what the field takes to sow: baked (in the smoker if the house has one), eaten like any meal
         new Need("bake potatoes", bot -> Home.isNear(bot, 32)

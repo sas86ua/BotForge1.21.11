@@ -31,7 +31,7 @@ import java.util.UUID;
 
 /** Keeps track of the bots that are currently in the world. */
 public final class BotManager {
-    public static final int MAX_BOTS = 12;
+    public static final int MAX_BOTS = 15;
     /** Ticks between death and respawn (the death animation takes 20). */
     private static final int RESPAWN_DELAY = 60;
 

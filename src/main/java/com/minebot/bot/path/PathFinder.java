@@ -460,6 +460,10 @@ public class PathFinder {
         if (state == null) {
             return INF;
         }
+        if (state.is(net.minecraft.tags.BlockTags.FENCE_GATES)
+            && com.minebot.bot.ai.SheepPenTask.isGate(level.getServer(), x, y, z)) {
+            return INF; // (a sheep pen's gate: no way through, the sheep would get out)
+        }
         if (passable(x, y, z, state)) {
             return 0;
         }

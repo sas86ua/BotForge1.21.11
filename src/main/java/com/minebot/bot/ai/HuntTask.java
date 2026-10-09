@@ -187,6 +187,9 @@ public class HuntTask extends Task {
                 entity -> isFairGame(bot, kill, entity) && !exclude.contains(entity.getUUID()))
             .stream()
             .filter(entity -> herdSize(bot, entity) >= MIN_HERD)
+            // (wild sheep round a pen are to be brought into it, not eaten)
+            .filter(entity -> !(entity instanceof net.minecraft.world.entity.animal.sheep.Sheep)
+                || !SheepPenTask.nearPen(level, entity.blockPosition(), SheepPenTask.SPARE_RANGE))
             .min(Comparator.comparingDouble(bot::distanceToSqr))
             .orElse(null);
     }
@@ -209,6 +212,9 @@ public class HuntTask extends Task {
             return false; // someone's pet or livestock
         }
         ServerLevel level = bot.level();
+        if (entity instanceof net.minecraft.world.entity.animal.sheep.Sheep && SheepPenTask.nearPen(level, entity.blockPosition(), 0)) {
+            return false; // (someone's pen: theirs)
+        }
         return bot.memory().inZone(level.dimension(), entity.blockPosition())
             && !ProtectedAreas.isProtected(level, entity.blockPosition());
     }

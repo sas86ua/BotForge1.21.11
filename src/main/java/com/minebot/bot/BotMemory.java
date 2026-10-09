@@ -54,7 +54,9 @@ public class BotMemory {
             Farm.CODEC.listOf().optionalFieldOf("farms", List.of()).forGetter(e -> e.farms),
             BlockPos.CODEC.listOf().optionalFieldOf("scaffold", List.of()).forGetter(e -> e.scaffold),
             BlockPos.CODEC.listOf().optionalFieldOf("borrowed", List.of()).forGetter(e -> e.borrowed),
-            Codec.LONG.optionalFieldOf("rebuild_at", -1L).forGetter(e -> e.rebuildAt)
+            Codec.LONG.optionalFieldOf("rebuild_at", -1L).forGetter(e -> e.rebuildAt),
+            BlockPos.CODEC.optionalFieldOf("pen").forGetter(e -> Optional.ofNullable(e.pen)),
+            BlockPos.CODEC.optionalFieldOf("pen_gate").forGetter(e -> Optional.ofNullable(e.penGate))
         ).apply(i, Extra::new));
 
         /** Lava near its zone's centre, to burn rubbish in. */
@@ -77,14 +79,18 @@ public class BotMemory {
         private final List<BlockPos> borrowed;
         /** When it builds a new house (a schematic one) in place of its old template house; -1: not set yet. */
         private long rebuildAt;
+        /** Its sheep pen: the inside's north-west corner where the sheep stand (6x6), and the gate in its fence. */
+        private @Nullable BlockPos pen;
+        private @Nullable BlockPos penGate;
 
         Extra() {
-            this(Optional.empty(), -1L, -1L, Optional.empty(), Direction.NORTH, 0, false, Optional.empty(), List.of(), List.of(), List.of(), -1L);
+            this(Optional.empty(), -1L, -1L, Optional.empty(), Direction.NORTH, 0, false, Optional.empty(), List.of(), List.of(), List.of(), -1L, Optional.empty(), Optional.empty());
         }
 
         private Extra(Optional<GlobalPos> lava, long homeSince, long nextJourney, Optional<BlockPos> houseOrigin,
                       Direction houseFront, int houseTemplate, boolean houseDone, Optional<BlockPos> workshop,
-                      List<Farm> farms, List<BlockPos> scaffold, List<BlockPos> borrowed, long rebuildAt) {
+                      List<Farm> farms, List<BlockPos> scaffold, List<BlockPos> borrowed, long rebuildAt, Optional<BlockPos> pen,
+                      Optional<BlockPos> penGate) {
             this.lava = lava.orElse(null);
             this.homeSince = homeSince;
             this.nextJourney = nextJourney;
@@ -97,6 +103,8 @@ public class BotMemory {
             this.scaffold = new ArrayList<>(scaffold);
             this.borrowed = new ArrayList<>(borrowed);
             this.rebuildAt = rebuildAt;
+            this.pen = pen.orElse(null);
+            this.penGate = penGate.orElse(null);
         }
     }
 
@@ -388,6 +396,20 @@ public class BotMemory {
     public List<BlockPos> scaffold() {
         changed(); // (the list is changed in place by whoever has it)
         return extra.scaffold;
+    }
+
+    public @Nullable BlockPos pen() {
+        return extra.pen;
+    }
+
+    public @Nullable BlockPos penGate() {
+        return extra.penGate;
+    }
+
+    public void setPen(@Nullable BlockPos pen, @Nullable BlockPos gate) {
+        extra.pen = pen;
+        extra.penGate = gate;
+        changed();
     }
 
     public List<Farm> farms() {
