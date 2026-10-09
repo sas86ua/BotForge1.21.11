@@ -40,7 +40,8 @@ public class EscapeTask extends Task {
     /** Underground and in trouble: running out of air, or no way found to wherever it was going. */
     public static boolean wanted(BotPlayer bot) {
         if (!underground(bot)) {
-            return false;
+            // (shut in a room above ground: nowhere to go, its way out walled up - Glowstone, in its own house)
+            return bot.recentNavFailures(20 * 60) >= 4 && bot.stillSeconds() >= 20 && enclosure(bot) != null;
         }
         boolean drowning = bot.isUnderWater() && bot.getAirSupply() < bot.getMaxAirSupply() / 2;
         // (paths failing now and then is normal down a mine: stuck means going nowhere for a minute too)
@@ -59,8 +60,116 @@ public class EscapeTask extends Task {
             && feet.getY() < level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, feet.getX(), feet.getZ()) - DEPTH;
     }
 
+    /**
+     * The cells it can reach from where it stands, if they are shut in on every side (no door, no open sky, a small
+     * space); null if there is a way out - or no telling.
+     */
+    private static @org.jetbrains.annotations.Nullable java.util.Set<BlockPos> enclosure(BotPlayer bot) {
+        ServerLevel level = bot.level();
+        java.util.Set<BlockPos> seen = new java.util.HashSet<>();
+        java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
+        BlockPos start = bot.blockPosition();
+        queue.add(start);
+        seen.add(start);
+        while (!queue.isEmpty()) {
+            BlockPos at = queue.poll();
+            if (level.canSeeSky(at) || seen.size() > 600) {
+                return null;
+            }
+            for (Direction direction : Direction.values()) {
+                BlockPos next = at.relative(direction);
+                if (seen.contains(next)) {
+                    continue;
+                }
+                if (!level.isLoaded(next)) {
+                    return null;
+                }
+                BlockState state = level.getBlockState(next);
+                if (BlockRules.isOpenable(state)) {
+                    return null; // (a door or gate: a way out, whatever the paths say)
+                }
+                if (state.getCollisionShape(level, next).isEmpty()) {
+                    seen.add(next);
+                    queue.add(next);
+                }
+            }
+        }
+        return seen;
+    }
+
+    private boolean sealed;
+    private java.util.List<BlockPos> sealRoute;
+
+    /** Through the nearest wall to the outside: the cells of the way, feet level and head level, thinnest first. */
+    private void planSealRoute(java.util.Set<BlockPos> inside) {
+        ServerLevel level = bot.level();
+        BlockPos feet = bot.blockPosition();
+        java.util.List<BlockPos> best = null;
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            java.util.List<BlockPos> route = new java.util.ArrayList<>();
+            boolean out = false;
+            for (int k = 1; k <= 8 && !out; k++) {
+                BlockPos low = feet.relative(direction, k);
+                BlockPos high = low.above();
+                if (!level.isLoaded(low)) {
+                    break;
+                }
+                route.add(low);
+                route.add(high);
+                out = !inside.contains(low) && isOpen(level, low) && isOpen(level, high) && !isOpen(level, low.below())
+                    || !inside.contains(low) && isOpen(level, low) && isOpen(level, high) && k > 1 && route.stream().anyMatch(p -> !isOpen(level, p));
+            }
+            if (out && route.stream().allMatch(p -> isOpen(level, p) || canBreak(level, p) || level.getBlockState(p).getDestroySpeed(level, p) >= 0 && !level.getBlockState(p).hasBlockEntity() && !ProtectedAreas.isProtected(level, p))
+                && (best == null || route.size() < best.size())) {
+                best = route;
+            }
+        }
+        sealRoute = best;
+    }
+
+    /** Breaks out through the wall along the planned way (walls too: it is its own house it is shut in), then walks out. */
+    private Status breakOut() {
+        ServerLevel level = bot.level();
+        for (BlockPos pos : sealRoute) {
+            if (!isOpen(level, pos)) {
+                bot.controller().lookAt(Vec3.atCenterOf(pos));
+                breaker.start(pos);
+                return Status.RUNNING;
+            }
+        }
+        BlockPos end = sealRoute.get(sealRoute.size() - 2);
+        bot.controller().moveTowards(Vec3.atBottomCenterOf(end), false, false);
+        double dx = end.getX() + 0.5 - bot.getX();
+        double dz = end.getZ() + 0.5 - bot.getZ();
+        if (dx * dx + dz * dz < 0.5) {
+            bot.debug("out of the walls by breaking through at {}", end.toShortString());
+            bot.clearNavFailures();
+            return Status.SUCCESS;
+        }
+        return Status.RUNNING;
+    }
+
     @Override
     public Status tick() {
+        if (!sealed && !underground(bot)) {
+            if (ticks == 0) {
+                java.util.Set<BlockPos> inside = enclosure(bot);
+                if (inside != null) {
+                    planSealRoute(inside);
+                    sealed = sealRoute != null;
+                    bot.debug("shut in by walls with {} cells to move about; {}", inside.size(), sealed ? "breaking out" : "no way to break out");
+                }
+            }
+        }
+        if (sealed) {
+            if (++ticks > MAX_TICKS) {
+                return Status.FAILURE;
+            }
+            if (breaker.target() != null && breaker.tick() == BlockBreaker.Result.RUNNING) {
+                return Status.RUNNING;
+            }
+            return breakOut();
+        }
         if (!underground(bot)) {
             bot.debug("out of the cave");
             bot.clearNavFailures();

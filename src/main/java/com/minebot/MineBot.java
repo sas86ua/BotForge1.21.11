@@ -26,6 +26,7 @@ public final class MineBot {
         TickEvent.ServerTickEvent.Post.BUS.addListener(event -> {
             ProtectedAreas.tick(event.server());
             BotManager.tick(event.server());
+            com.minebot.bot.ai.SheepPenTask.shutStrayGates(event.server());
             com.minebot.bot.build.GreatBuild.get(event.server()).tick(event.server());
             com.minebot.stats.ServerStats.tick(event.server());
         });

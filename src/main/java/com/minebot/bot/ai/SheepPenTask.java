@@ -220,6 +220,32 @@ public class SheepPenTask extends Task {
         return false;
     }
 
+    /**
+     * Every couple of seconds: a pen's gate standing open with nobody beside it is shut (a bot called away to something
+     * else mid-way left it so, and the sheep walked out - and a lone sheep outside it is fetched in again).
+     */
+    public static void shutStrayGates(MinecraftServer server) {
+        if (server.getTickCount() % 40 != 0) {
+            return;
+        }
+        ServerLevel level = server.overworld();
+        for (Pen pen : pens(server)) {
+            BlockPos gate = pen.gate();
+            if (!level.isLoaded(gate)) {
+                continue;
+            }
+            BlockState state = level.getBlockState(gate);
+            if (!state.is(BlockTags.FENCE_GATES) || !state.hasProperty(BlockStateProperties.OPEN) || !state.getValue(BlockStateProperties.OPEN)) {
+                continue;
+            }
+            AABB around = new AABB(gate).inflate(2.5);
+            boolean someone = !level.getEntitiesOfClass(net.minecraft.world.entity.player.Player.class, around).isEmpty();
+            if (!someone) {
+                level.setBlock(gate, state.setValue(BlockStateProperties.OPEN, false), 3);
+            }
+        }
+    }
+
     /** Is this in a pen, or (with a margin) round one? */
     public static boolean nearPen(ServerLevel level, BlockPos pos, int margin) {
         if (level.dimension() != Level.OVERWORLD) {
@@ -683,13 +709,13 @@ public class SheepPenTask extends Task {
     }
 
     /** Through the gate from one side to the other, shut behind it; true once there. */
-    private boolean pass(boolean in) {
+    private boolean pass(boolean in, boolean shut) {
         BlockPos gate = bot.memory().penGate();
         Direction out = out(bot.memory().pen(), gate);
         BlockPos from = gate.relative(in ? out : out.getOpposite());
         BlockPos to = gate.relative(in ? out.getOpposite() : out);
         if (isInside() == in && !inGateway()) {
-            if (gateOpen()) {
+            if (shut && gateOpen()) {
                 bot.controller().releaseInputs();
                 useGate(); // (shut behind it)
             }
@@ -715,7 +741,7 @@ public class SheepPenTask extends Task {
     }
 
     private boolean enter() {
-        return pass(true);
+        return pass(true, true);
     }
 
     private boolean leave() {
@@ -725,7 +751,7 @@ public class SheepPenTask extends Task {
             }
             return true;
         }
-        return pass(false);
+        return pass(false, true);
     }
 
     // ---- fetching sheep ---------------------------------------------------------------------
@@ -782,7 +808,7 @@ public class SheepPenTask extends Task {
             return Status.RUNNING;
         }
         if (!isInside()) {
-            enter();
+            pass(true, false); // (the gate left open behind it: the sheep follows in, then it's shut)
             return Status.RUNNING;
         }
         // In the pen: to the far side, so it comes in after
