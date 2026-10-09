@@ -31,14 +31,15 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Keeps its buildings (the house, the hut it keeps as a workshop) clear of trees: a tree
+ * Keeps its buildings (the house, the hut it keeps as a workshop, wherever it keeps things, the village church and
+ * library) clear of trees: a tree
  * standing within {@link #CLEARANCE} blocks of the walls is felled whole, and leaves in that
  * space are taken off (a tree that grew up by the door once shut a bot in). Only natural trees:
  * logs with leaves of their own, leaves that would decay; never logs that are part of a building.
  */
 public class ClearTreesTask extends Task {
     /** How far from its walls trees aren't let grow. */
-    public static final int CLEARANCE = 4;
+    public static final int CLEARANCE = 5;
     private static final int CHECK_INTERVAL = 20 * 60 * 5;
     private static final int TICKS_PER_BLOCK = 20 * 15;
     private static final int MAX_TICKS = 20 * 60 * 4;
@@ -84,12 +85,18 @@ public class ClearTreesTask extends Task {
         ServerLevel level = bot.level();
         BotMemory memory = bot.memory();
         List<BoundingBox> boxes = new ArrayList<>();
-        if (memory.houseOrigin() != null && memory.houseDone()) {
-            // The house: its plan, roof and all
-            var plan = com.minebot.bot.build.HousePlans.of(memory);
-            BlockPos o = plan.origin();
-            boxes.add(new BoundingBox(o.getX(), o.getY(), o.getZ(),
-                o.getX() + plan.sizeX() - 1, plan.topY() + 1, o.getZ() + plan.sizeZ() - 1));
+        var house = memory.houseOrigin() != null ? com.minebot.bot.build.HousePlans.of(memory) : null;
+        if (house != null) {
+            boxes.add(box(house)); // (the house: its plan, roof and all - going up, too)
+        }
+        if (memory.home() != null && level.dimension() == net.minecraft.world.level.Level.OVERWORLD) {
+            // The village's church and library it helped build
+            BlockPos home = memory.home().pos();
+            for (var project : com.minebot.bot.build.Villages.get(level.getServer()).projects()) {
+                if (project.origin().closerThan(home, VILLAGE_RANGE)) {
+                    boxes.add(box(com.minebot.bot.build.Villages.plan(project)));
+                }
+            }
         }
         Set<BlockPos> anchors = new LinkedHashSet<>();
         if (memory.bed() != null) {
@@ -100,11 +107,21 @@ public class ClearTreesTask extends Task {
         }
         if (memory.home() != null && memory.home().dimension() == level.dimension()) {
             anchors.add(memory.home().pos());
+            // Wherever it keeps things: an old house, a smithy, a yard - each a building of its own to keep clear
+            anchors.addAll(memory.chests());
+            for (BlockPos thing : new BlockPos[] {memory.furnace(), memory.craftingTable(), memory.campfire()}) {
+                if (thing != null) {
+                    anchors.add(thing);
+                }
+            }
         }
+        List<BlockPos> searched = new ArrayList<>();
         for (BlockPos anchor : anchors) {
-            if (!level.isLoaded(anchor) || boxes.stream().anyMatch(box -> box.isInside(anchor))) {
+            if (!level.isLoaded(anchor) || boxes.stream().anyMatch(box -> box.isInside(anchor))
+                || searched.stream().anyMatch(done -> done.closerThan(anchor, 8))) {
                 continue;
             }
+            searched.add(anchor);
             List<BlockPos> built = BlockSearch.find(level, anchor, BUILDING_RADIUS, anchor.getY() - 4, anchor.getY() + 10,
                 state -> BlockRules.isBuilt(state) || state.is(BlockTags.DOORS), (pos, state) -> true, 2000);
             if (built.size() < 8) {
@@ -113,6 +130,14 @@ public class ClearTreesTask extends Task {
             boxes.add(BoundingBox.encapsulatingPositions(built).orElseThrow());
         }
         return boxes;
+    }
+
+    /** How far from its home the village buildings it keeps clear may be. */
+    private static final int VILLAGE_RANGE = 300;
+
+    private static BoundingBox box(com.minebot.bot.build.HousePlan plan) {
+        BlockPos o = plan.origin();
+        return new BoundingBox(o.getX(), o.getY(), o.getZ(), o.getX() + plan.sizeX() - 1, plan.topY() + 1, o.getZ() + plan.sizeZ() - 1);
     }
 
     /** What to take down: whole trees standing near the walls (logs, top first), then leaves near them. */
