@@ -73,13 +73,13 @@ public class EscapeTask extends Task {
         seen.add(start);
         while (!queue.isEmpty()) {
             BlockPos at = queue.poll();
-            if (level.canSeeSky(at) || seen.size() > 600) {
+            if (seen.size() > 600) {
                 return null;
             }
             for (Direction direction : Direction.values()) {
                 BlockPos next = at.relative(direction);
-                if (seen.contains(next)) {
-                    continue;
+                if (seen.contains(next) || next.getY() > start.getY() + 2) {
+                    continue; // (an open roof is no way out of walls three high: it can't jump higher than that)
                 }
                 if (!level.isLoaded(next)) {
                     return null;
