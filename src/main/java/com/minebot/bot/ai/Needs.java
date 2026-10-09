@@ -96,6 +96,9 @@ public final class Needs {
         new Need("home", bot -> !Home.has(bot) && !HouseTask.movingIn(bot), HomeTask::new), // (not while carrying its bed to its house)
         // A bed out in the open gets walls and a roof around it
         new Need("shelter", bot -> BuildHomeTask.needsShelter(bot) && !HouseTask.movingIn(bot), BuildHomeTask::shelter),
+        // After 20-30 days in the first hut: a proper house next to it (above the small chores: it was cut short by
+        // each of them, a minute of building at a time)
+        new Need("house", HouseTask::wanted, HouseTask::new),
         new Need("furnish", Home::needsFurniture, FurnishTask::new),
         new Need("clear trees", ClearTreesTask::wanted, ClearTreesTask::new),
         new Need("store", ChestTask::bagFull, StoreTask::new),
@@ -175,8 +178,6 @@ public final class Needs {
         new Need("diamond tools", DiamondTools::wanted, DiamondTools::task),
         // The last 10 days before that: stocks up for it a little at a time, in the chests
         new Need("house prep", HousePrepTask::wanted, HousePrepTask::new),
-        // After 20-30 days in the first hut: a proper house next to it
-        new Need("house", HouseTask::wanted, HouseTask::new),
         // Then, the village's houses all built: its church and library, together (see Villages)
         new Need("village build", bot -> !GreatBuildTask.isAway(bot) && !GreatBuildTask.sessionOn(bot) && VillageBuildTask.wanted(bot),
             VillageBuildTask::new),
