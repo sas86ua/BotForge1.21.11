@@ -59,10 +59,31 @@ public class DismantleTask extends Task {
         // Gone, or to stay (filling a shaft, by water: no diving to take a block down); those far off or
         // not loaded wait for it to come back (the list is kept)
         // (a stray block in its house goes whatever it stands next to: a bed and a wall aren't a shaft)
-        pillars.removeIf(pos -> com.minebot.bot.build.GreatBuild.nearSite(pos) || bot.level().isLoaded(pos) && (!isOurBlock(bot, pos)
+        pillars.removeIf(pos -> com.minebot.bot.build.GreatBuild.nearSite(pos) || inHousePlan(bot, pos) || bot.level().isLoaded(pos) && (!isOurBlock(bot, pos)
             || !Home.isClutter(bot, pos) && (!bot.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.LADDER)
                 && (inShaft(bot, pos, pillars) || inWall(bot, pos)) || touchesWater(bot, pos) || underground(bot, pos))));
         return pillars.stream().anyMatch(pos -> near(bot, pos));
+    }
+
+    /**
+     * A cell its house plan has a block in (ground, a wall, a floor): what stands there is the house's, not scaffolding -
+     * taken down, the house put it back, and so on round (Makena, at a corner of hers).
+     */
+    private static boolean inHousePlan(BotPlayer bot, BlockPos pos) {
+        var memory = bot.memory();
+        if (memory.houseOrigin() == null) {
+            return false;
+        }
+        var plan = com.minebot.bot.build.HousePlans.of(memory);
+        if (plan == null || !plan.inFootprint(pos) || Home.isClutter(bot, pos)) {
+            return false;
+        }
+        for (var cell : plan.cells()) {
+            if (cell.pos().equals(pos)) {
+                return cell.kind() != '.';
+            }
+        }
+        return false;
     }
 
     /**
