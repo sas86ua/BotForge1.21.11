@@ -165,6 +165,15 @@ public class SheepPenTask extends Task {
             if (!(cell.equals(gate) ? state.is(BlockTags.FENCE_GATES) : state.is(BlockTags.FENCES))) {
                 return false;
             }
+            if (!level.getBlockState(cell.above()).canBeReplaced()) {
+                return false; // (something on the fence: a step out for the sheep)
+            }
+        }
+        for (BlockPos cell : inside(pen)) {
+            if (Inv.isScaffold(new ItemStack(level.getBlockState(cell).getBlock().asItem()))
+                || Inv.isScaffold(new ItemStack(level.getBlockState(cell.above()).getBlock().asItem()))) {
+                return false; // (a block left inside: a step up to the fence)
+            }
         }
         return true;
     }
@@ -175,11 +184,36 @@ public class SheepPenTask extends Task {
 
     // ---- other bots' sake --------------------------------------------------------------------
 
-    /** Is this a pen's gate? (No way goes through one: the sheep would get out.) */
-    public static boolean isGate(MinecraftServer server, int x, int y, int z) {
-        for (BotMemory memory : BotRegistry.get(server).all()) {
-            BlockPos gate = memory.penGate();
-            if (gate != null && gate.getX() == x && gate.getY() == y && gate.getZ() == z) {
+    /** Every bot's pen (looked up afresh every few seconds: the path search asks a lot). */
+    private record Pen(UUID owner, BlockPos pen, BlockPos gate) {
+    }
+
+    private static volatile List<Pen> pens = List.of();
+    private static volatile long pensAt = Long.MIN_VALUE;
+
+    private static List<Pen> pens(MinecraftServer server) {
+        long now = server.getTickCount();
+        if (pensAt == Long.MIN_VALUE || now - pensAt > 100 || now < pensAt) {
+            List<Pen> list = new ArrayList<>();
+            for (BotMemory memory : BotRegistry.get(server).all()) {
+                if (memory.pen() != null && memory.penGate() != null) {
+                    list.add(new Pen(memory.uuid(), memory.pen(), memory.penGate()));
+                }
+            }
+            pens = List.copyOf(list);
+            pensAt = now;
+        }
+        return pens;
+    }
+
+    /**
+     * Is this another bot's pen gate? (No way goes through one: the sheep would get out.) Its own it may go through,
+     * shutting it behind it (see Navigator) - else, stopped inside, it built its way out over the fence.
+     */
+    public static boolean isGate(MinecraftServer server, int x, int y, int z, UUID who) {
+        for (Pen pen : pens(server)) {
+            BlockPos gate = pen.gate();
+            if (gate.getX() == x && gate.getY() == y && gate.getZ() == z && !pen.owner().equals(who)) {
                 return true;
             }
         }
@@ -191,9 +225,9 @@ public class SheepPenTask extends Task {
         if (level.dimension() != Level.OVERWORLD) {
             return false;
         }
-        for (BotMemory memory : BotRegistry.get(level.getServer()).all()) {
-            BlockPos pen = memory.pen();
-            if (pen != null && pos.getX() >= pen.getX() - margin && pos.getX() < pen.getX() + SIZE + margin
+        for (Pen each : pens(level.getServer())) {
+            BlockPos pen = each.pen();
+            if (pos.getX() >= pen.getX() - margin && pos.getX() < pen.getX() + SIZE + margin
                 && pos.getZ() >= pen.getZ() - margin && pos.getZ() < pen.getZ() + SIZE + margin
                 && Math.abs(pos.getY() - pen.getY()) <= 3 + margin) {
                 return true;
@@ -399,6 +433,7 @@ public class SheepPenTask extends Task {
                 return finish(Status.FAILURE, DAY);
             }
             memory.setPen(site.pen(), site.gate());
+            pensAt = Long.MIN_VALUE;
             bot.debug("sheep pen: at {}, the gate at {}", site.pen().toShortString(), site.gate().toShortString());
         }
         BlockPos pen = memory.pen();
@@ -447,7 +482,10 @@ public class SheepPenTask extends Task {
                 if (state.canBeReplaced() || state.is(BlockTags.FENCES) || state.is(BlockTags.FENCE_GATES) || skipped.contains(clear)) {
                     continue;
                 }
-                if (!BlockRules.canBreak(level, clear, state) || BlockRules.isBuilt(state)) {
+                // (a block of cobblestone or dirt left lying in it - a step put down on some way: it goes, built or not; the
+                // sheep climbed it and out over the fence)
+                boolean stray = Inv.isScaffold(new ItemStack(state.getBlock().asItem())) && !ProtectedAreas.isProtected(level, clear);
+                if (!stray && (!BlockRules.canBreak(level, clear, state) || BlockRules.isBuilt(state))) {
                     skipped.add(clear);
                     continue;
                 }

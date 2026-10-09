@@ -220,6 +220,7 @@ public class Navigator {
     }
 
     public Status tick() {
+        shutGateBehind();
         if (goal == null) {
             return status;
         }
@@ -813,6 +814,9 @@ public class Navigator {
             if (BlockRules.isOpenable(state)) {
                 if (!isOpen(state)) {
                     openDoor(pos);
+                    if (state.is(net.minecraft.tags.BlockTags.FENCE_GATES)) {
+                        openedGate = pos.immutable(); // (shut behind it: a pen's sheep would get out)
+                    }
                     return true;
                 }
                 continue;
@@ -831,6 +835,27 @@ public class Navigator {
             return true;
         }
         return false;
+    }
+
+    /** A fence gate it opened on its way: shut once it's through. */
+    private @Nullable BlockPos openedGate;
+
+    private void shutGateBehind() {
+        BlockPos gate = openedGate;
+        if (gate == null) {
+            return;
+        }
+        double distance = bot.position().distanceTo(Vec3.atBottomCenterOf(gate));
+        if (distance > 6 || !bot.level().getBlockState(gate).is(net.minecraft.tags.BlockTags.FENCE_GATES)) {
+            openedGate = null;
+            return;
+        }
+        if (distance > 1.6 && !bot.getBoundingBox().intersects(new net.minecraft.world.phys.AABB(gate))) {
+            if (isOpen(bot.level().getBlockState(gate))) {
+                openDoor(gate);
+            }
+            openedGate = null;
+        }
     }
 
     private static boolean isOpen(BlockState state) {

@@ -254,6 +254,9 @@ public class PathFinder {
      * beds, no-go areas such as a village): no building there. Getting out of a cave is the exception.
      */
     private boolean mayPlace(int x, int y, int z) {
+        if (com.minebot.bot.ai.SheepPenTask.nearPen(level, cursor.set(x, y, z), 1)) {
+            return false; // (not in a sheep pen nor on its fence: a block there was the sheep's way out)
+        }
         return options.escape() || !ProtectedAreas.isProtected(level, cursor.set(x, y, z));
     }
 
@@ -461,8 +464,8 @@ public class PathFinder {
             return INF;
         }
         if (state.is(net.minecraft.tags.BlockTags.FENCE_GATES)
-            && com.minebot.bot.ai.SheepPenTask.isGate(level.getServer(), x, y, z)) {
-            return INF; // (a sheep pen's gate: no way through, the sheep would get out)
+            && com.minebot.bot.ai.SheepPenTask.isGate(level.getServer(), x, y, z, bot.getUUID())) {
+            return INF; // (another's sheep pen gate: no way through, the sheep would get out)
         }
         if (passable(x, y, z, state)) {
             return 0;
