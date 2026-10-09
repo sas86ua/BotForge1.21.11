@@ -63,6 +63,10 @@ public class SheepPenTask extends Task {
     private static final int MAX_SHEEP = 8;
     /** Fewer sheep than this (grown and lambs): one more lured in. */
     private static final int STOCK = 3;
+    /** Grown sheep always kept (to breed from), however short of food it is. */
+    private static final int KEEP_SHEEP = 4;
+    /** Food at home (cooked, and raw mutton to cook) below which a sheep goes for meat. */
+    private static final int MEAT_KEEP = 32;
     /** How far from the pen sheep are fetched. */
     private static final int LURE_RANGE = 64;
     /** Wild sheep this close to a pen are left alive by hunters (to be lured in). */
@@ -220,7 +224,7 @@ public class SheepPenTask extends Task {
         if (sheep.size() < STOCK && wheat > 0 && wildSheep(bot, pen) != null) {
             return Job.LURE;
         }
-        if (grown.size() > MAX_SHEEP) {
+        if (grown.size() > MAX_SHEEP || grown.size() > KEEP_SHEEP && meatLow(bot)) {
             return Job.CULL;
         }
         if (grown.size() >= 2 && sheep.size() < MAX_SHEEP && wheat >= 2 && grown.stream().filter(SheepPenTask::canBreed).count() >= 2) {
@@ -236,6 +240,12 @@ public class SheepPenTask extends Task {
             }
         }
         return null;
+    }
+
+    /** Short of food at home: cooked food and raw mutton, bag and chests. */
+    private static boolean meatLow(BotPlayer bot) {
+        Target food = new Target("food", stack -> Food.isCooked(stack) || stack.is(Items.MUTTON), 1);
+        return Inv.count(bot, food.accepts()) + ChestTask.stored(bot, food) < MEAT_KEEP;
     }
 
     private static boolean canBreed(Sheep sheep) {
@@ -870,7 +880,7 @@ public class SheepPenTask extends Task {
                 yield grown.stream().filter(s -> !s.isSheared() && wanted.containsKey(s.getColor()))
                     .min(Comparator.comparingDouble(bot::distanceToSqr)).orElse(null);
             }
-            case CULL -> grown.size() <= MAX_SHEEP ? null : grown.stream()
+            case CULL -> grown.size() <= KEEP_SHEEP || grown.size() <= MAX_SHEEP && !meatLow(bot) ? null : grown.stream()
                 // (the plainest go first: shorn, then white - a dyed one is worth keeping)
                 .min(Comparator.comparingInt((Sheep s) -> (s.isSheared() ? 0 : 2) + (s.getColor() == DyeColor.WHITE ? 0 : 1))
                     .thenComparingDouble(bot::distanceToSqr))
