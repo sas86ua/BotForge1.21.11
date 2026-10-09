@@ -84,6 +84,9 @@ public final class Tools {
         }
         // (a diamond one with no diamonds to make another: an iron one will do to follow it)
         int wanted = worn >= 3 && !diamondsFor(bot, kind) ? 2 : worn;
+        if (makeDo(bot, kind, worn)) {
+            wanted = 1;
+        }
         return worn >= 0 && sound < wanted;
     }
 
@@ -96,12 +99,30 @@ public final class Tools {
                 worn = Math.max(worn, rank(stack.getItem()));
             }
         }
+        if (makeDo(bot, kind, worn)) {
+            Target stone = target(kind, Tier.STONE);
+            return new Target(stone.name(), stone.accepts().and(stack -> !isWorn(stack)), 1);
+        }
         if (worn >= 3 && diamondsFor(bot, kind)) {
             return new Target("diamond " + kind.location().getPath(), stack -> stack.is(kind) && rank(stack.getItem()) >= 3 && !isWorn(stack), 1);
         }
         // (a sound one: the worn one itself is no replacement - it counted as one, and "new axe" was done at once, over and over)
         Target same = target(kind, tierOf(worn));
         return new Target(same.name(), same.accepts().and(stack -> !isWorn(stack)), 1);
+    }
+
+    /**
+     * At the Great Build with the iron (or diamonds) for another like it not in the bag: a stone one there and then, of
+     * the cobblestone all about - not down the caves under the site for iron ore, five of them at once mid-session. The
+     * proper one is made at home.
+     */
+    private static boolean makeDo(BotPlayer bot, TagKey<Item> kind, int worn) {
+        if (worn < 2 || !GreatBuildTask.isAway(bot)) {
+            return false;
+        }
+        int needed = kind == ItemTags.SWORDS ? 2 : kind == ItemTags.SHOVELS ? 1 : 3;
+        net.minecraft.world.item.Item material = worn >= 3 ? net.minecraft.world.item.Items.DIAMOND : net.minecraft.world.item.Items.IRON_INGOT;
+        return Inv.count(bot, stack -> stack.is(material)) < needed;
     }
 
     /** Diamonds enough (bag and chests) for a diamond tool of this kind. */
