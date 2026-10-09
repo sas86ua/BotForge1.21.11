@@ -47,12 +47,21 @@ public final class BlockPlacer {
         if (!level.getBlockState(target).canBeReplaced()) {
             return false;
         }
-        BlockHitResult hit = findSupport(level, target, face);
+        BlockHitResult hit = findSupport(level, target, face, false);
         if (hit == null || !bot.isWithinBlockInteractionRange(hit.getBlockPos(), 0.5)) {
             return false;
         }
         if (!Inv.select(bot, item)) {
             return false;
+        }
+        if (bot.getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem block
+            && block.getBlock() instanceof net.minecraft.world.level.block.SlabBlock) {
+            // (a slab clicked on the side of another slab joins it into a double one instead of going in the cell:
+            // "did nothing", a dozen times over, and the wall beside it changed - Makena)
+            BlockHitResult other = findSupport(level, target, face, true);
+            if (other != null) {
+                hit = other;
+            }
         }
         bot.controller().lookAt(hit.getLocation());
         if (facing != null) {
@@ -87,6 +96,11 @@ public final class BlockPlacer {
 
     /** A solid neighbour face to click, so the new block lands in {@code target}. */
     static @Nullable BlockHitResult findSupport(ServerLevel level, BlockPos target, @Nullable Direction face) {
+        return findSupport(level, target, face, false);
+    }
+
+    /** As above; {@code forSlab}: not the side of another half-height slab (see place). */
+    static @Nullable BlockHitResult findSupport(ServerLevel level, BlockPos target, @Nullable Direction face, boolean forSlab) {
         for (Direction direction : SUPPORT_ORDER) {
             if (face != null && direction != face) {
                 continue;
@@ -94,6 +108,10 @@ public final class BlockPlacer {
             BlockPos neighbour = target.relative(direction);
             BlockState state = level.getBlockState(neighbour);
             if (state.canBeReplaced() || state.getCollisionShape(level, neighbour).isEmpty()) {
+                continue;
+            }
+            if (forSlab && direction.getAxis().isHorizontal() && state.getBlock() instanceof net.minecraft.world.level.block.SlabBlock
+                && state.getValue(net.minecraft.world.level.block.SlabBlock.TYPE) != net.minecraft.world.level.block.state.properties.SlabType.DOUBLE) {
                 continue;
             }
             Direction clickedFace = direction.getOpposite();
