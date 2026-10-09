@@ -77,7 +77,11 @@ public class HouseTask extends Task {
     private @Nullable HousePlan plan;
     private @Nullable Task child;
     private final BlockBreaker breaker;
-    private final Set<BlockPos> skipped = new HashSet<>();
+    private final Set<BlockPos> skipped;
+    /** What each bot left out, and till when (game time): not tried again each time the task starts over after a
+     *  meal or a fight - Makena tried the same cells 120 times. */
+    private static final Map<java.util.UUID, Map<BlockPos, Long>> SKIPPED = new ConcurrentHashMap<>();
+    private static final int SKIP_TICKS = 20 * 60 * 10;
     private @Nullable BlockPos working;
     private int workingTicks;
     private boolean pillarLogging;
@@ -90,6 +94,13 @@ public class HouseTask extends Task {
     public HouseTask(BotPlayer bot) {
         super(bot);
         this.breaker = new BlockBreaker(bot);
+        this.skipped = new HashSet<>();
+        long now = bot.level().getGameTime();
+        Map<BlockPos, Long> left = SKIPPED.get(bot.getUUID());
+        if (left != null) {
+            left.values().removeIf(until -> until <= now);
+            skipped.addAll(left.keySet());
+        }
     }
 
     /** 20-30 days after moving into its first home (a bit different for each bot). */
@@ -679,11 +690,27 @@ public class HouseTask extends Task {
             }
             BlockState state = level.getBlockState(cell.pos());
             if (!plan.isDone(cell, state) && state.canBeReplaced()) {
-                return place(cell.pos(), plan.material(cell), null, null);
+                return place(supportFor(level, cell.pos()), plan.material(cell), null, null);
             }
         }
         startBuilding();
         return Status.RUNNING;
+    }
+
+    /**
+     * Where to put the ground down first: the cell itself, or if it hangs over water or a hole (nothing beside or under
+     * it to put a block against - Makena's site ran over the edge of a pond) the first spot down the column that has.
+     */
+    private static BlockPos supportFor(ServerLevel level, BlockPos pos) {
+        BlockPos at = pos;
+        for (int down = 0; down < 6 && !BlockPlacer.canPlaceAt(level, at); down++) {
+            BlockPos below = at.below();
+            if (!level.getBlockState(below).canBeReplaced()) {
+                break;
+            }
+            at = below;
+        }
+        return BlockPlacer.canPlaceAt(level, at) ? at : pos;
     }
 
     private void startBuilding() {
@@ -889,7 +916,9 @@ public class HouseTask extends Task {
             return Status.RUNNING;
         }
         if (!breaker.isBreaking(pos)) {
-            if (!bot.isWithinBlockInteractionRange(pos, 0.0)) {
+            if (!bot.isWithinBlockInteractionRange(pos, 0.0) || !steady()) {
+                // (within reach only standing: at the top of a hop up its pillar it reached, started, came down out of
+                // reach and gave the block up - Makena's leaves)
                 approach(pos);
                 return Status.RUNNING;
             }
@@ -959,8 +988,13 @@ public class HouseTask extends Task {
     private void skip(BlockPos pos, String why) {
         bot.debug("house: leaving out {} ({})", pos.toShortString(), why);
         skipped.add(pos);
+        SKIPPED.computeIfAbsent(bot.getUUID(), u -> new ConcurrentHashMap<>()).put(pos.immutable(), bot.level().getGameTime() + SKIP_TICKS);
         working = null;
         bot.navigator().stop();
+    }
+
+    private boolean steady() {
+        return bot.onGround() || bot.isInWater() || bot.onClimbable() || bot.getVehicle() != null;
     }
 
     @Override

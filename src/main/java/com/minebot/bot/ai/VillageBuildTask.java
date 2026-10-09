@@ -471,7 +471,9 @@ public class VillageBuildTask extends Task {
             return Status.RUNNING;
         }
         if (!breaker.isBreaking(pos)) {
-            if (!bot.isWithinBlockInteractionRange(pos, 0.0)) {
+            if (!bot.isWithinBlockInteractionRange(pos, 0.0) || !steady()) {
+                // (within reach only standing: at the top of a hop up its pillar it reached, started, came down out of
+                // reach and gave the block up - Makena's leaves)
                 approach(pos);
                 return Status.RUNNING;
             }
@@ -529,6 +531,10 @@ public class VillageBuildTask extends Task {
         skipped.add(pos);
         working = null;
         bot.navigator().stop();
+    }
+
+    private boolean steady() {
+        return bot.onGround() || bot.isInWater() || bot.onClimbable() || bot.getVehicle() != null;
     }
 
     @Override
