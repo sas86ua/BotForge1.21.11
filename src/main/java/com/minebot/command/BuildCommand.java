@@ -53,6 +53,15 @@ final class BuildCommand {
                     .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
                         BotManager.all().stream().map(BotPlayer::getPlainTextName), builder))
                     .executes(ctx -> sendEarly(ctx, StringArgumentType.getString(ctx, "bot")))))
+            .then(Commands.literal("writeoff").executes(ctx -> {
+                GreatBuild build = existing(ctx);
+                if (build == null) {
+                    return 0;
+                }
+                build.allowWriteOffNow();
+                reply(ctx, "Great Build: layers the bots can't get at may be written off from now on (no waiting for the sessions)");
+                return 1;
+            }))
             .then(Commands.literal("retry").executes(ctx -> {
                 GreatBuild build = existing(ctx);
                 if (build == null) {

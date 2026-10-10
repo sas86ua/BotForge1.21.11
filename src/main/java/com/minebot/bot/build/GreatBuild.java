@@ -865,6 +865,12 @@ public final class GreatBuild extends SavedData {
         }
     }
 
+    /** An admin's: the site counts as dug out long ago - layers may be written off from now on. */
+    public void allowWriteOffNow() {
+        siteDugSession = 0;
+        setDirty();
+    }
+
     private boolean mayWriteOff() {
         return siteDugSession >= 0 && sessions >= siteDugSession + SESSIONS_BEFORE_WRITE_OFF;
     }
