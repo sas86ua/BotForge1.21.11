@@ -784,12 +784,12 @@ public class GreatBuildTask extends Task {
             sightWalked = false;
         }
         // To dig it, also where it can be seen (like a player: not through other blocks); one walk for that
-        boolean unseen = dig && near && !sightWalked && !Goal.canSee(level, bot.getEyePosition(), pos);
+        boolean unseen = false; // (no sight needed at the site: through other blocks too, as the diggers asked - it is only reach)
         if (!near || !dig && inside || unseen) {
             Navigator navigator = bot.navigator();
             if (!navigator.isActive() || jobTicks == 1) {
                 // (one walled in all round is never in sight: just close by, it's swapped where it is)
-                navigator.navigate(dig && openFace(level, pos) ? Goal.reachVisible(level, pos) : Goal.reach(pos), JOB_NODES);
+                navigator.navigate(Goal.reach(pos), JOB_NODES);
             }
             Navigator.Status status = navigator.tick();
             if (status == Navigator.Status.FAILED) {
@@ -840,6 +840,9 @@ public class GreatBuildTask extends Task {
      * of the plan to dig out, or plain ground off the plan); null if it's part of the building.
      */
     private @Nullable BlockPos inSight(GreatBuild build, BlockPos pos) {
+        if (true) {
+            return pos; // (no sight needed: whatever is between, the block itself is the one to dig)
+        }
         ServerLevel level = bot.level();
         Vec3 eyes = bot.getEyePosition();
         BlockHitResult hit = level.clip(new ClipContext(eyes, Vec3.atCenterOf(pos),
