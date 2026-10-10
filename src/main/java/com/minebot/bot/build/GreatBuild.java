@@ -595,6 +595,19 @@ public final class GreatBuild extends SavedData {
         return 100.0 * done / relevantTotal[category];
     }
 
+    /** For the status: which layers are written off (below which height), and when that may start. */
+    public String writeOffText() {
+        if (floorLayer > 0) {
+            return "written-off layers: 0.." + (floorLayer - 1) + " (heights " + origin.getY() + ".." + (origin.getY() + floorLayer - 1)
+                + "); building from layer " + floorLayer + " (height " + (origin.getY() + floorLayer) + ")";
+        }
+        if (mayWriteOff()) {
+            return "no layers written off yet (the rule is on: three builders giving up on the lowest layer within five minutes)";
+        }
+        return siteDugSession < 0 ? "layer write-off: waits for the site to be dug out (99%)"
+            : "layer write-off: starts in " + (siteDugSession + SESSIONS_BEFORE_WRITE_OFF - sessions) + " sessions";
+    }
+
     public String progressText() {
         return String.format(java.util.Locale.ROOT, "%.1f%% постройки (площадка готова на %.0f%%)", progress(0), progress(1));
     }
