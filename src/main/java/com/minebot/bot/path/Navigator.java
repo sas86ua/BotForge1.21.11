@@ -167,6 +167,7 @@ public class Navigator {
      * back over a gap on a journey), and so does whatever it built getting out of a cave.
      */
     private void noteScaffold(BlockPos pos, boolean bridge) {
+        com.minebot.bot.build.GreatBuild.climbBlockPlaced(pos, bot.level().getGameTime());
         if (pillarLog != null) {
             pillarLog.add(pos.immutable());
         } else if (!escape && (!bridge || com.minebot.bot.ai.Home.isNear(bot, 48)) && !com.minebot.bot.build.GreatBuild.nearSite(pos)) {
@@ -541,6 +542,7 @@ public class Navigator {
                             replan(Inv.count(bot, stack -> stack.is(net.minecraft.world.item.Items.LADDER)) == 0
                                 ? "out of ladders" : "could not put up a ladder");
                         } else {
+                            com.minebot.bot.build.GreatBuild.climbBlockPlaced(rung, bot.level().getGameTime());
                             if (!com.minebot.bot.build.GreatBuild.nearSite(rung)) {
                                 bot.notePillar(rung.immutable()); // (taken down again once it's done with it, see DismantleTask)
                             }

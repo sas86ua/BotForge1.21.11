@@ -123,6 +123,28 @@ public final class GreatBuild extends SavedData {
     private final Map<UUID, BlockPos> campChest;
     /** What each bot couldn't get getting ready (no flowers, no sheep round its home...): ordered from others. */
     private final Map<UUID, List<String>> cantGet;
+    /**
+     * Ladders, pillars and bridges the bots put up at the site to get about in it: left standing for an hour (they stand
+     * in cells the plan has empty, so the diggers took them down as soon as they went up, the builders put them up
+     * again to climb out of the pit, and so on - most of a session). The way up is used by all of them meanwhile.
+     */
+    private static final java.util.Map<Long, Long> CLIMB = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long CLIMB_KEEP_TICKS = 20L * 60 * 60;
+
+    public static void climbBlockPlaced(BlockPos pos, long now) {
+        if (nearSite(pos)) {
+            if (CLIMB.size() > 5000) {
+                CLIMB.values().removeIf(until -> until < now);
+            }
+            CLIMB.put(pos.asLong(), now + CLIMB_KEEP_TICKS);
+        }
+    }
+
+    private static boolean isClimbBlock(BlockPos pos, long now) {
+        Long until = CLIMB.get(pos.asLong());
+        return until != null && until > now;
+    }
+
     /** Layers below this are written off for good: the bots in numbers couldn't get at them (see noteGiveUp). */
     private int floorLayer;
     /** The session count when the site was dug out (99%, the diggers down to the lowest layer); -1: not yet. */
@@ -724,6 +746,9 @@ public final class GreatBuild extends SavedData {
                         continue;
                     }
                     BlockPos pos = worldPos(index);
+                    if (type == JobType.DIG && isClimbBlock(pos, time)) {
+                        continue; // (a bot's way up or across: left)
+                    }
                     if (reachOnly && bottomUp && (pos.getY() > bot.getBlockY() + REACH_UP || pos.getY() < bot.getBlockY() - REACH_DOWN)) {
                         continue;
                     }
