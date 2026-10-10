@@ -191,7 +191,9 @@ public final class HouseSchematics {
             || state.is(Blocks.GOLD_BLOCK) || state.is(Blocks.DIAMOND_BLOCK) || state.is(Blocks.EMERALD_BLOCK)
             || state.is(Blocks.BREWING_STAND) || state.is(Blocks.ENCHANTING_TABLE) || state.is(Blocks.CAKE)
             || state.is(Blocks.LEVER) || state.is(Blocks.REDSTONE_WIRE) || state.is(Blocks.TRIPWIRE_HOOK)
-            || state.is(Blocks.COBWEB) || state.is(Blocks.SPAWNER) || state.is(Blocks.BEACON) || state.is(Blocks.DECORATED_POT)) {
+            || state.is(Blocks.COBWEB) || state.is(Blocks.SPAWNER) || state.is(Blocks.BEACON) || state.is(Blocks.DECORATED_POT)
+            // (flowers: some grow only far off - Redstone went looking for closed eyeblossoms for its house, over the whole land)
+            || state.is(BlockTags.FLOWERS) || path.endsWith("eyeblossom")) {
             return null;
         }
         Block substitute = SUBSTITUTES.get(block);
