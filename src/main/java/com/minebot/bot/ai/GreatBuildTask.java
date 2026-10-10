@@ -292,6 +292,8 @@ public class GreatBuildTask extends Task {
     /** Camp furnaces are looked at this often, and only those this close. */
     private static final int OUTPUT_CHECK_TICKS = 20 * 30;
     private long nextOutputCheck;
+    /** No look for a job before this tick (it found none). */
+    private long nextJobAt;
     private static final int OUTPUT_RANGE = 48;
 
     /** The nearest camp furnace (anyone's) that has gone out with something done in it, or null. */
@@ -572,8 +574,14 @@ public class GreatBuildTask extends Task {
                     return dump;
                 }
             }
+            if (bot.level().getGameTime() < nextJobAt) {
+                return Status.RUNNING; // (nothing found a moment ago: the whole site isn't gone over every tick by every bot - that hung the server)
+            }
             Stash.makeRoom(bot, 3);
             job = build.nextJob(bot, true, digger);
+            if (job == null) {
+                nextJobAt = bot.level().getGameTime() + 20 + bot.getRandom().nextInt(20);
+            }
             boolean carries = carriesMaterial(build);
             if ((job == null || job.type() != GreatBuild.JobType.PLACE) && !carries && !(digger && job != null)) {
                 // Out of materials: from a camp chest if there's some there, else from the mine under the site
