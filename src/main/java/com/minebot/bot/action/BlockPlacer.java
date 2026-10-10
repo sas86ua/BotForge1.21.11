@@ -92,7 +92,11 @@ public final class BlockPlacer {
         BlockState state = level.getBlockState(pos);
         return state.getMenuProvider(level, pos) != null || com.minebot.bot.world.BlockRules.isOpenable(state)
             || state.is(net.minecraft.tags.BlockTags.BEDS) || state.is(net.minecraft.tags.BlockTags.BUTTONS)
-            || state.is(net.minecraft.world.level.block.Blocks.LEVER) || state.hasBlockEntity();
+            || state.is(net.minecraft.world.level.block.Blocks.LEVER) || state.hasBlockEntity()
+            || state.is(net.minecraft.tags.BlockTags.TRAPDOORS) || state.is(net.minecraft.world.level.block.Blocks.NOTE_BLOCK)
+            || state.is(net.minecraft.world.level.block.Blocks.REPEATER) || state.is(net.minecraft.world.level.block.Blocks.COMPARATOR)
+            || state.is(net.minecraft.world.level.block.Blocks.DAYLIGHT_DETECTOR) || state.is(net.minecraft.tags.BlockTags.CAULDRONS)
+            || state.is(net.minecraft.tags.BlockTags.FLOWER_POTS);
     }
 
     /** A solid neighbour face to click, so the new block lands in {@code target}. */
@@ -102,6 +106,13 @@ public final class BlockPlacer {
 
     /** As above; {@code forSlab}: not the side of another half-height slab (see place). */
     static @Nullable BlockHitResult findSupport(ServerLevel level, BlockPos target, @Nullable Direction face, boolean forSlab) {
+        // (a plain block to click first: a trapdoor, door or button clicked opens or presses, not a place to put a block against)
+        BlockHitResult plain = findSupport(level, target, face, forSlab, false);
+        return plain != null ? plain : findSupport(level, target, face, forSlab, true);
+    }
+
+    private static @Nullable BlockHitResult findSupport(ServerLevel level, BlockPos target, @Nullable Direction face, boolean forSlab,
+                                                       boolean anything) {
         for (Direction direction : SUPPORT_ORDER) {
             if (face != null && direction != face) {
                 continue;
@@ -109,6 +120,9 @@ public final class BlockPlacer {
             BlockPos neighbour = target.relative(direction);
             BlockState state = level.getBlockState(neighbour);
             if (state.canBeReplaced() || state.getCollisionShape(level, neighbour).isEmpty()) {
+                continue;
+            }
+            if (!anything && isInteractive(level, neighbour)) {
                 continue;
             }
             if (forSlab && state.getBlock() instanceof net.minecraft.world.level.block.SlabBlock) {
