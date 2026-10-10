@@ -582,6 +582,26 @@ public final class GreatBuild extends SavedData {
      * lowest first; then filling in the ground; then digging out, highest first.
      */
     public @Nullable Job nextJob(BotPlayer bot, boolean digging, boolean digFirst) {
+        // What it can reach standing where it is, without a jump or a pillar, first (up to five blocks over its feet and
+        // three under them); only when there is none, anything on the site
+        reachOnly = true;
+        try {
+            Job job = nextJobIn(bot, digging, digFirst);
+            if (job != null) {
+                return job;
+            }
+        } finally {
+            reachOnly = false;
+        }
+        return nextJobIn(bot, digging, digFirst);
+    }
+
+    /** Only cells within reach up and down of the bot (see nextJob). */
+    private boolean reachOnly;
+    private static final int REACH_UP = 5;
+    private static final int REACH_DOWN = 3;
+
+    private @Nullable Job nextJobIn(BotPlayer bot, boolean digging, boolean digFirst) {
         Schematic schematic = plan;
         if (schematic == null) {
             return null;
@@ -692,6 +712,9 @@ public final class GreatBuild extends SavedData {
                         continue;
                     }
                     BlockPos pos = worldPos(index);
+                    if (reachOnly && (pos.getY() > bot.getBlockY() + REACH_UP || pos.getY() < bot.getBlockY() - REACH_DOWN)) {
+                        continue;
+                    }
                     LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
                     if (chunk == null) {
                         continue;
