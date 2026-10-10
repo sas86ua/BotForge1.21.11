@@ -844,11 +844,11 @@ public final class GreatBuild extends SavedData {
 
     private final Map<Integer, Map<UUID, Long>> layerGiveUps = new java.util.HashMap<>();
     private static final int GIVE_UP_BOTS = 3;
-    private static final long GIVE_UP_WINDOW = 20L * 60 * 12;
+    private static final long GIVE_UP_WINDOW = 20L * 60 * 5;
 
     /**
      * The lowest layer to build in is too deep to get at (a pit under the finished part): three bots or more giving
-     * up on its cells within twelve minutes write it off - the building goes on from the layer above it, and if that
+     * up on its cells within five minutes write it off - the building goes on from the layer above it, and if that
      * can't be got at either, from the next, and so on - for good.
      */
     private void noteGiveUp(BotPlayer bot, Job job, long now) {
