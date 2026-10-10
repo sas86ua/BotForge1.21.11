@@ -116,7 +116,7 @@ public final class BlockPlacer {
                 var doubled = net.minecraft.world.level.block.state.properties.SlabType.DOUBLE;
                 var bottom = net.minecraft.world.level.block.state.properties.SlabType.BOTTOM;
                 // (on its side, on top of a bottom one, under a top one: the two join into a whole block, the cell stays empty)
-                if (type != doubled && (direction.getAxis().isHorizontal() && type == bottom || direction == Direction.DOWN && type == bottom
+                if (type != doubled && (direction.getAxis().isHorizontal() && type != bottom || direction == Direction.DOWN && type == bottom
                     || direction == Direction.UP && type != bottom)) {
                     continue;
                 }
