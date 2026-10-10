@@ -91,7 +91,8 @@ public final class GreatBuild extends SavedData {
         UUIDUtil.STRING_CODEC.listOf().optionalFieldOf("sent_early", List.of()).forGetter(b -> List.copyOf(b.sentEarly)),
         Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC).optionalFieldOf("camp_chest", Map.of()).forGetter(b -> b.campChest),
         Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.STRING.listOf()).optionalFieldOf("cant_get", Map.of()).forGetter(b -> b.cantGet),
-        Codec.INT.optionalFieldOf("floor_layer", 0).forGetter(b -> b.floorLayer)
+        Codec.INT.optionalFieldOf("floor_layer", 0).forGetter(b -> b.floorLayer),
+        Codec.INT.optionalFieldOf("site_dug_session", -1).forGetter(b -> b.siteDugSession)
     ).apply(i, GreatBuild::new));
     private static final SavedDataType<GreatBuild> TYPE =
         new SavedDataType<>("minebot_great_build", GreatBuild::new, CODEC, null);
@@ -124,6 +125,10 @@ public final class GreatBuild extends SavedData {
     private final Map<UUID, List<String>> cantGet;
     /** Layers below this are written off for good: the bots in numbers couldn't get at them (see noteGiveUp). */
     private int floorLayer;
+    /** The session count when the site was dug out (99%, the diggers down to the lowest layer); -1: not yet. */
+    private int siteDugSession = -1;
+    /** Sessions after that before the builders may write off layers they can't get at. */
+    private static final int SESSIONS_BEFORE_WRITE_OFF = 3;
 
     // ---- not saved ------------------------------------------------------------------------------
     private @Nullable Schematic plan;
@@ -148,13 +153,14 @@ public final class GreatBuild extends SavedData {
     private final Map<Item, Integer> materialTotals = new LinkedHashMap<>();
 
     public GreatBuild() {
-        this("", BlockPos.ZERO, -1, -1, 0, Map.of(), Map.of(), 0, 0, List.of(), Map.of(), List.of(), Map.of(), Map.of(), 0);
+        this("", BlockPos.ZERO, -1, -1, 0, Map.of(), Map.of(), 0, 0, List.of(), Map.of(), List.of(), Map.of(), Map.of(), 0, -1);
     }
 
     private GreatBuild(String file, BlockPos centre, long nextDay, long sessionEnd, int sessions,
                        Map<UUID, Map<String, Integer>> orders, Map<String, Integer> failures, long placed, long dug,
-                       List<Integer> chunkDone, Map<UUID, List<BlockPos>> camp, List<UUID> sentEarly, Map<UUID, BlockPos> campChest, Map<UUID, List<String>> cantGet, int floorLayer) {
+                       List<Integer> chunkDone, Map<UUID, List<BlockPos>> camp, List<UUID> sentEarly, Map<UUID, BlockPos> campChest, Map<UUID, List<String>> cantGet, int floorLayer, int siteDugSession) {
         this.floorLayer = floorLayer;
+        this.siteDugSession = siteDugSession;
         this.file = file;
         this.centre = centre;
         this.nextDay = nextDay;
@@ -384,6 +390,7 @@ public final class GreatBuild extends SavedData {
 
     /** Starts a session right away (an admin's "now"). */
     public void startSession(MinecraftServer server) {
+        noteSiteDug();
         long now = server.overworld().getDayTime();
         sessionEnd = now + SESSION;
         nextDay = (now / DAY) + PERIOD / DAY;
@@ -395,6 +402,7 @@ public final class GreatBuild extends SavedData {
     }
 
     public void endSession(MinecraftServer server) {
+        noteSiteDug();
         sessionEnd = -1;
         restocking.clear();
         sentEarly.clear();
@@ -845,8 +853,21 @@ public final class GreatBuild extends SavedData {
     private final Map<Integer, Map<UUID, Long>> layerGiveUps = new java.util.HashMap<>();
     private static final int GIVE_UP_BOTS = 3;
     private static final long GIVE_UP_WINDOW = 20L * 60 * 5;
-    /** The share of the site dug out (percent) from which layers may be written off. */
-    private static final double SITE_DUG = 98.5;
+    /** The share of the site dug out (percent) that counts as done. */
+    private static final double SITE_DUG = 99.0;
+
+    /** Noted at the start and end of a session: the site dug out, from when the sessions are counted. */
+    private void noteSiteDug() {
+        if (siteDugSession < 0 && plan != null && progress(1) >= SITE_DUG) {
+            siteDugSession = sessions;
+            setDirty();
+            LOGGER.info("Great Build: the site is dug out (session {}); layers may be written off in {} sessions", sessions, SESSIONS_BEFORE_WRITE_OFF);
+        }
+    }
+
+    private boolean mayWriteOff() {
+        return siteDugSession >= 0 && sessions >= siteDugSession + SESSIONS_BEFORE_WRITE_OFF;
+    }
 
     /**
      * The lowest layer to build in is too deep to get at (a pit under the finished part): three bots or more giving
@@ -854,7 +875,7 @@ public final class GreatBuild extends SavedData {
      * can't be got at either, from the next, and so on - for good.
      */
     private void noteGiveUp(BotPlayer bot, Job job, long now) {
-        if (job.type() == JobType.DIG || plan == null || progress(1) < SITE_DUG) {
+        if (job.type() == JobType.DIG || plan == null || !mayWriteOff()) {
             return; // (not while the site is still being dug out: the diggers are at work, the layers below are still opening up)
         }
         int size = plan.width() * plan.length();
