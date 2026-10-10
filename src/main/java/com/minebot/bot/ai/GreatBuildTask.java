@@ -812,6 +812,19 @@ public class GreatBuildTask extends Task {
         // Close enough, and (to put a block there) not standing in it
         boolean inside = bot.getBoundingBox().intersects(new AABB(pos));
         boolean near = bot.isWithinBlockInteractionRange(pos, 0.5);
+        if (!near && jobTicks % 20 == 10 && bot.distanceToSqr(Vec3.atCenterOf(pos)) > 100) {
+            // On its way to a far job: work that's right there, past which it ran (the unfinished part by the road), is done first
+            GreatBuild.Job here = build.jobAtHand(bot, true, isDigger(bot));
+            if (here != null && here.index() != current.index()) {
+                bot.navigator().stop();
+                dropJob(build);
+                job = here;
+                build.claim(bot, here);
+                jobTicks = 0;
+                placeFails = 0;
+                return Status.RUNNING;
+            }
+        }
         if (!dig && inside && near && !bot.blockPosition().equals(pos) && !bot.blockPosition().above().equals(pos)) {
             // Only its body over the edge of the cell (it stands next to it): a step back into the middle of its
             // own block (the way there is "reached" already: it stood there till the job timed out)

@@ -643,6 +643,16 @@ public final class GreatBuild extends SavedData {
         return nextJobIn(bot, digging, digFirst);
     }
 
+    /** A job within reach of where the bot stands (no walking), or null: for one on its way to some far job past work. */
+    public @Nullable Job jobAtHand(BotPlayer bot, boolean digging, boolean digFirst) {
+        reachOnly = true;
+        try {
+            return nextJobIn(bot, digging, digFirst);
+        } finally {
+            reachOnly = false;
+        }
+    }
+
     /** Only cells within reach up and down of the bot (see nextJob). */
     private boolean reachOnly;
     private static final int REACH_UP = 5;
