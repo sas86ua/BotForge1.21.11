@@ -90,7 +90,8 @@ public final class GreatBuild extends SavedData {
         Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC.listOf()).optionalFieldOf("camp", Map.of()).forGetter(b -> b.camp),
         UUIDUtil.STRING_CODEC.listOf().optionalFieldOf("sent_early", List.of()).forGetter(b -> List.copyOf(b.sentEarly)),
         Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC).optionalFieldOf("camp_chest", Map.of()).forGetter(b -> b.campChest),
-        Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.STRING.listOf()).optionalFieldOf("cant_get", Map.of()).forGetter(b -> b.cantGet)
+        Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.STRING.listOf()).optionalFieldOf("cant_get", Map.of()).forGetter(b -> b.cantGet),
+        Codec.INT.optionalFieldOf("floor_layer", 0).forGetter(b -> b.floorLayer)
     ).apply(i, GreatBuild::new));
     private static final SavedDataType<GreatBuild> TYPE =
         new SavedDataType<>("minebot_great_build", GreatBuild::new, CODEC, null);
@@ -121,6 +122,8 @@ public final class GreatBuild extends SavedData {
     private final Map<UUID, BlockPos> campChest;
     /** What each bot couldn't get getting ready (no flowers, no sheep round its home...): ordered from others. */
     private final Map<UUID, List<String>> cantGet;
+    /** Layers below this are written off for good: the bots in numbers couldn't get at them (see noteGiveUp). */
+    private int floorLayer;
 
     // ---- not saved ------------------------------------------------------------------------------
     private @Nullable Schematic plan;
@@ -145,12 +148,13 @@ public final class GreatBuild extends SavedData {
     private final Map<Item, Integer> materialTotals = new LinkedHashMap<>();
 
     public GreatBuild() {
-        this("", BlockPos.ZERO, -1, -1, 0, Map.of(), Map.of(), 0, 0, List.of(), Map.of(), List.of(), Map.of(), Map.of());
+        this("", BlockPos.ZERO, -1, -1, 0, Map.of(), Map.of(), 0, 0, List.of(), Map.of(), List.of(), Map.of(), Map.of(), 0);
     }
 
     private GreatBuild(String file, BlockPos centre, long nextDay, long sessionEnd, int sessions,
                        Map<UUID, Map<String, Integer>> orders, Map<String, Integer> failures, long placed, long dug,
-                       List<Integer> chunkDone, Map<UUID, List<BlockPos>> camp, List<UUID> sentEarly, Map<UUID, BlockPos> campChest, Map<UUID, List<String>> cantGet) {
+                       List<Integer> chunkDone, Map<UUID, List<BlockPos>> camp, List<UUID> sentEarly, Map<UUID, BlockPos> campChest, Map<UUID, List<String>> cantGet, int floorLayer) {
+        this.floorLayer = floorLayer;
         this.file = file;
         this.centre = centre;
         this.nextDay = nextDay;
@@ -380,9 +384,6 @@ public final class GreatBuild extends SavedData {
 
     /** Starts a session right away (an admin's "now"). */
     public void startSession(MinecraftServer server) {
-        floorLayer = 0; // (what was written off last time is tried again)
-        layerGiveUps.clear();
-        lowestLayerAt = Long.MIN_VALUE;
         long now = server.overworld().getDayTime();
         sessionEnd = now + SESSION;
         nextDay = (now / DAY) + PERIOD / DAY;
@@ -841,8 +842,6 @@ public final class GreatBuild extends SavedData {
         noteGiveUp(bot, job, now);
     }
 
-    /** Layers below this are written off for now: the bots in numbers couldn't get at them (see noteGiveUp). */
-    private int floorLayer;
     private final Map<Integer, Map<UUID, Long>> layerGiveUps = new java.util.HashMap<>();
     private static final int GIVE_UP_BOTS = 3;
     private static final long GIVE_UP_WINDOW = 20L * 60 * 12;
@@ -850,7 +849,7 @@ public final class GreatBuild extends SavedData {
     /**
      * The lowest layer to build in is too deep to get at (a pit under the finished part): three bots or more giving
      * up on its cells within twelve minutes write it off - the building goes on from the layer above it, and if that
-     * can't be got at either, from the next, and so on - till the next session, when it's tried again.
+     * can't be got at either, from the next, and so on - for good.
      */
     private void noteGiveUp(BotPlayer bot, Job job, long now) {
         if (job.type() == JobType.DIG || plan == null) {
@@ -868,6 +867,7 @@ public final class GreatBuild extends SavedData {
             floorLayer = layer + 1;
             layerGiveUps.clear();
             lowestLayerAt = Long.MIN_VALUE;
+            setDirty();
             LOGGER.info("Great Build: layer {} is out of the bots' reach; building on from layer {}", layer, floorLayer);
         }
     }
