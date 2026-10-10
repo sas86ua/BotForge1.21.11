@@ -815,7 +815,7 @@ public class GreatBuildTask extends Task {
         if (!near && jobTicks % 20 == 10 && bot.distanceToSqr(Vec3.atCenterOf(pos)) > 100) {
             // On its way to a far job: work that's right there, past which it ran (the unfinished part by the road), is done first
             GreatBuild.Job here = build.jobAtHand(bot, true, isDigger(bot));
-            if (here != null && here.index() != current.index()) {
+            if (here != null && here.index() != current.index() && bot.distanceToSqr(Vec3.atCenterOf(here.pos())) <= 25) {
                 bot.navigator().stop();
                 dropJob(build);
                 job = here;
