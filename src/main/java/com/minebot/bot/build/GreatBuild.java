@@ -672,7 +672,7 @@ public final class GreatBuild extends SavedData {
             if (bottomUp && step < lowest) {
                 continue;
             }
-            if (bottomUp && step > lowest + 1) {
+            if (bottomUp && step > lowest + UP_LAYERS) {
                 break;
             }
             if (firstStep >= 0 && step > firstStep + LAYER_WINDOW) {
@@ -760,6 +760,8 @@ public final class GreatBuild extends SavedData {
 
     /** Layers above the lowest one with work that are looked at too, and what a layer up counts as (blocks of walking). */
     private static final int LAYER_WINDOW = 3;
+    /** The layers above the lowest unfinished one it may build in when it has no blocks for that one (five: no further up). */
+    private static final int UP_LAYERS = 5;
     private static final double LAYER_COST = 6;
 
     /** Can this job be started on this block as it is? */
