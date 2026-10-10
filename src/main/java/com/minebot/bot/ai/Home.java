@@ -80,6 +80,92 @@ public final class Home {
         return CLUTTER.getOrDefault(bot.getUUID(), java.util.Set.of()).contains(pos);
     }
 
+    /** How far round the house (and the old hut) the steps, pillars and ladders put up to build it are taken down. */
+    private static final int TIDY_RANGE = 6;
+    private static final int TIDY_HEIGHT = 40;
+
+    /**
+     * Once the house is done: what the bots put up to climb on while building it (pillars, ramps, ladders), round the
+     * house and the hut it started from, goes like any pillar. Only blocks that stand out (three sides open) or ladders:
+     * the ground is left as it is, and so is anything by a field, water or fence.
+     */
+    private static void noteStrays(BotPlayer bot, ServerLevel level, com.minebot.bot.build.HousePlan plan) {
+        BotMemory memory = bot.memory();
+        java.util.Set<BlockPos> planned = new java.util.HashSet<>();
+        for (var cell : plan.cells()) {
+            if (cell.kind() != '.') {
+                planned.add(cell.pos());
+            }
+        }
+        BlockPos o = plan.origin();
+        int floor = plan.floorY();
+        java.util.List<int[]> areas = new java.util.ArrayList<>(); // (minX, minZ, maxX, maxZ)
+        areas.add(new int[] {o.getX() - TIDY_RANGE, o.getZ() - TIDY_RANGE, o.getX() + plan.sizeX() - 1 + TIDY_RANGE,
+            o.getZ() + plan.sizeZ() - 1 + TIDY_RANGE});
+        BlockPos hut = memory.workshop();
+        if (hut != null && !plan.inFootprint(hut)) {
+            areas.add(new int[] {hut.getX() - TIDY_RANGE - 3, hut.getZ() - TIDY_RANGE - 3, hut.getX() + TIDY_RANGE + 3, hut.getZ() + TIDY_RANGE + 3});
+        }
+        int found = 0;
+        BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+        for (int[] area : areas) {
+            for (int x = area[0]; x <= area[2] && found < 150; x++) {
+                for (int z = area[1]; z <= area[3] && found < 150; z++) {
+                    if (!level.isLoaded(at.set(x, floor, z))) {
+                        continue;
+                    }
+                    int yMin = area == areas.get(0) ? floor : Math.max(level.getMinY(), (hut != null ? hut.getY() : floor) - 1);
+                    for (int y = yMin; y <= yMin + TIDY_HEIGHT && found < 150; y++) {
+                        at.set(x, y, z);
+                        net.minecraft.world.level.block.state.BlockState state = level.getBlockState(at);
+                        boolean ladder = state.is(net.minecraft.world.level.block.Blocks.LADDER);
+                        if (!ladder && !com.minebot.bot.action.Inv.isScaffold(new net.minecraft.world.item.ItemStack(state.getBlock().asItem()))) {
+                            continue;
+                        }
+                        BlockPos pos = at.immutable();
+                        if (planned.contains(pos) || bot.pillars().contains(pos) || isClutter(bot, pos) || stray(level, pos, ladder, plan, floor) == false) {
+                            continue;
+                        }
+                        bot.debug("a stray {} at {} by the house; taking it down", state.getBlock().getName().getString(), pos.toShortString());
+                        bot.notePillar(pos);
+                        CLUTTER.computeIfAbsent(bot.getUUID(), u -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(pos);
+                        found++;
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean stray(ServerLevel level, BlockPos pos, boolean ladder, com.minebot.bot.build.HousePlan plan, int floor) {
+        if (com.minebot.bot.build.GreatBuild.nearSite(pos) || com.minebot.bot.world.ProtectedAreas.isProtected(level, pos)
+            || !com.minebot.bot.world.BlockRules.canBreak(level, pos, level.getBlockState(pos))) {
+            return false;
+        }
+        // (the path of ground round the house, at its floor)
+        if (pos.getY() <= floor && pos.getX() >= plan.origin().getX() - 1 && pos.getX() <= plan.origin().getX() + plan.sizeX()
+            && pos.getZ() >= plan.origin().getZ() - 1 && pos.getZ() <= plan.origin().getZ() + plan.sizeZ()) {
+            return false;
+        }
+        int open = 0;
+        for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.values()) {
+            BlockPos side = pos.relative(direction);
+            net.minecraft.world.level.block.state.BlockState state = level.getBlockState(side);
+            if (state.is(net.minecraft.world.level.block.Blocks.FARMLAND) || !state.getFluidState().isEmpty()
+                || state.is(net.minecraft.tags.BlockTags.FENCES) || state.is(net.minecraft.tags.BlockTags.FENCE_GATES)
+                || state.is(net.minecraft.tags.BlockTags.WALLS)) {
+                return false;
+            }
+            if (direction.getAxis().isHorizontal() && (state.canBeReplaced() || state.getCollisionShape(level, side).isEmpty())) {
+                open++;
+            }
+        }
+        BlockPos above = pos.above();
+        net.minecraft.world.level.block.state.BlockState up = level.getBlockState(above);
+        boolean carries = !(up.isAir() || up.canBeReplaced() || up.is(net.minecraft.world.level.block.Blocks.LADDER)
+            || com.minebot.bot.action.Inv.isScaffold(new net.minecraft.world.item.ItemStack(up.getBlock().asItem())));
+        return !carries && (ladder || open >= 3);
+    }
+
     /**
      * A block of dirt or cobblestone (a step it stood on, a block put down in passing) in its house where the
      * plan has it empty - by the bed, in the way: taken out like a pillar (see DismantleTask). Furniture and
@@ -91,6 +177,7 @@ public final class Home {
         if (plan == null) {
             return;
         }
+        noteStrays(bot, level, plan);
         for (var cell : plan.cells()) {
             if (cell.kind() != '.' || cell.layer() == 0 || !level.isLoaded(cell.pos())) {
                 continue;

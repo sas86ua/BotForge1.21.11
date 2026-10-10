@@ -751,6 +751,8 @@ public class SheepPenTask extends Task {
             }
             return true;
         }
+        // (wheat in the hand and the sheep crowd round it and stand in the gateway: Sunny couldn't get out through them)
+        Inv.select(bot, stack -> !stack.isEmpty() && !stack.is(Items.WHEAT));
         return pass(false, true);
     }
 
