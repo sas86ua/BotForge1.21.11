@@ -59,9 +59,10 @@ public final class BlockPlacer {
             // (a slab clicked on the side of another slab joins it into a double one instead of going in the cell:
             // "did nothing", a dozen times over, and the wall beside it changed - Makena)
             BlockHitResult other = findSupport(level, target, face, true);
-            if (other != null) {
-                hit = other;
+            if (other == null) {
+                return false; // (nothing to put it against but slabs it would join: not placed, rather than a whole block made)
             }
+            hit = other;
         }
         bot.controller().lookAt(hit.getLocation());
         if (facing != null) {
@@ -110,9 +111,15 @@ public final class BlockPlacer {
             if (state.canBeReplaced() || state.getCollisionShape(level, neighbour).isEmpty()) {
                 continue;
             }
-            if (forSlab && direction.getAxis().isHorizontal() && state.getBlock() instanceof net.minecraft.world.level.block.SlabBlock
-                && state.getValue(net.minecraft.world.level.block.SlabBlock.TYPE) != net.minecraft.world.level.block.state.properties.SlabType.DOUBLE) {
-                continue;
+            if (forSlab && state.getBlock() instanceof net.minecraft.world.level.block.SlabBlock) {
+                var type = state.getValue(net.minecraft.world.level.block.SlabBlock.TYPE);
+                var doubled = net.minecraft.world.level.block.state.properties.SlabType.DOUBLE;
+                var bottom = net.minecraft.world.level.block.state.properties.SlabType.BOTTOM;
+                // (on its side, on top of a bottom one, under a top one: the two join into a whole block, the cell stays empty)
+                if (type != doubled && (direction.getAxis().isHorizontal() && type == bottom || direction == Direction.DOWN && type == bottom
+                    || direction == Direction.UP && type != bottom)) {
+                    continue;
+                }
             }
             Direction clickedFace = direction.getOpposite();
             Vec3 location = Vec3.atCenterOf(neighbour).add(Vec3.atLowerCornerOf(clickedFace.getUnitVec3i()).scale(0.5));
