@@ -1008,6 +1008,32 @@ public final class GreatBuild extends SavedData {
         return new ArrayList<>(result);
     }
 
+    /**
+     * Every chest to take materials from: the camp's, and any other standing on the site (a player's, say) in the
+     * chunks that are loaded.
+     */
+    public List<BlockPos> siteChests(ServerLevel level) {
+        java.util.Set<BlockPos> result = new java.util.LinkedHashSet<>(allCampChests(level));
+        int[] box = site;
+        if (box != null) {
+            for (int cx = box[0] >> 4; cx <= box[2] >> 4; cx++) {
+                for (int cz = box[1] >> 4; cz <= box[3] >> 4; cz++) {
+                    var chunk = level.getChunkSource().getChunkNow(cx, cz);
+                    if (chunk == null) {
+                        continue;
+                    }
+                    for (var entry : chunk.getBlockEntities().entrySet()) {
+                        BlockPos pos = entry.getKey();
+                        if (entry.getValue() instanceof net.minecraft.world.level.block.entity.ChestBlockEntity && nearSite(pos)) {
+                            result.add(pos.immutable());
+                        }
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(result);
+    }
+
     /** This bot's furnaces at its camp (those still standing). */
     public List<BlockPos> campFurnaces(BotPlayer bot) {
         List<BlockPos> mine = camp.getOrDefault(bot.getUUID(), List.of());

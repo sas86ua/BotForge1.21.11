@@ -229,7 +229,7 @@ public class GreatBuildTask extends Task {
         return false;
     }
 
-    /** Out of materials: building blocks (or fill) out of the nearest camp chest with some, anyone's. */
+    /** Out of materials: building blocks (or fill) out of the nearest chest on the site with some, anyone's (the camps' and any other). */
     private boolean takeFromCampChest(GreatBuild build) {
         ServerLevel level = bot.level();
         long now = level.getGameTime();
@@ -240,7 +240,7 @@ public class GreatBuildTask extends Task {
         Predicate<ItemStack> useful = stack -> build.isMaterial(stack.getItem()) || GreatBuild.FILL.test(stack);
         BlockPos best = null;
         double bestDistance = (double) CHEST_RANGE * CHEST_RANGE;
-        for (BlockPos pos : build.allCampChests(level)) {
+        for (BlockPos pos : build.siteChests(level)) {
             double distance = pos.distSqr(bot.blockPosition());
             if (distance < bestDistance && level.isLoaded(pos) && level.getBlockEntity(pos) instanceof ChestBlockEntity chest
                 && Stash.count(chest, useful) > 0) {
@@ -273,7 +273,7 @@ public class GreatBuildTask extends Task {
         nextFillAt = now + FILL_CHECK_TICKS;
         BlockPos best = null;
         double bestDistance = (double) CHEST_RANGE * CHEST_RANGE;
-        for (BlockPos pos : build.allCampChests(level)) {
+        for (BlockPos pos : build.siteChests(level)) {
             double distance = pos.distSqr(bot.blockPosition());
             if (distance < bestDistance && level.isLoaded(pos) && level.getBlockEntity(pos) instanceof ChestBlockEntity chest
                 && Stash.count(chest, GreatBuild.FILL) >= FILL_LOW) {
