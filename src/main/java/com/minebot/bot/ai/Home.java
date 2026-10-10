@@ -211,6 +211,14 @@ public final class Home {
             bot.debug("my furnace at {} is outside the house; {}", furnace.toShortString(),
                 inside != null ? "using the one at " + inside.toShortString() : "putting one in the house");
             memory.setFurnace(inside);
+            // (and the one outside comes down, unless it's in the workshop's room)
+            BlockPos workshop = memory.workshop();
+            boolean inWorkshop = workshop != null && Math.abs(workshop.getX() - furnace.getX()) <= 8
+                && Math.abs(workshop.getZ() - furnace.getZ()) <= 8 && Math.abs(workshop.getY() - furnace.getY()) <= 2;
+            if (!inWorkshop && !furnace.equals(inside) && level.getBlockState(furnace).is(net.minecraft.world.level.block.Blocks.FURNACE)) {
+                bot.notePillar(furnace.immutable());
+                CLUTTER.computeIfAbsent(bot.getUUID(), u -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(furnace.immutable());
+            }
         }
         for (var cell : plan.cells()) {
             if (cell.kind() != '.' || cell.layer() == 0 || !level.isLoaded(cell.pos())) {

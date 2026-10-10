@@ -381,12 +381,8 @@ public class SmeltTask extends Task {
             placer = null;
             furnace = spot;
             foreign = false;
-            var homePos = bot.memory().home();
-            boolean atHome = homePos != null && homePos.dimension() == level.dimension() && homePos.pos().closerThan(spot, 8);
-            placedFurnace = !atHome;
-            if (atHome) {
-                bot.memory().setFurnace(spot);
-            }
+            // (put down out in the open, it's a loan: taken back after - a furnace stays only inside a house or workshop)
+            placedFurnace = true;
             return true;
         }
         return false;

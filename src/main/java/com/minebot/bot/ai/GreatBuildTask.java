@@ -327,6 +327,37 @@ public class GreatBuildTask extends Task {
         return rank >= 0 && rank < count;
     }
 
+    /** Does the bot still lack some of what it's been asked to get ready for the Great Build (on it and in its chests)? */
+    public static boolean orderShort(BotPlayer bot) {
+        GreatBuild build = build(bot);
+        if (build == null) {
+            return false;
+        }
+        var order = build.orderOf(bot.getUUID());
+        if (order.isEmpty()) {
+            return false;
+        }
+        ServerLevel level = bot.level();
+        List<net.minecraft.world.Container> boxes = new java.util.ArrayList<>();
+        java.util.Set<BlockPos> seen = new java.util.HashSet<>();
+        for (BlockPos pos : bot.memory().chests()) {
+            if (seen.add(pos) && level.isLoaded(pos) && level.getBlockEntity(pos) instanceof net.minecraft.world.Container box) {
+                boxes.add(box);
+            }
+        }
+        for (var entry : order.entrySet()) {
+            Item item = entry.getKey();
+            int have = Inv.count(bot, stack -> stack.is(item));
+            for (var box : boxes) {
+                have += Stash.count(box, stack -> stack.is(item));
+            }
+            if (have < entry.getValue() && build.failures().getOrDefault(GreatBuild.key(item), 0) < 3) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static boolean sessionOn(BotPlayer bot) {
         GreatBuild build = build(bot);
         return build != null && (build.inSession(bot.level().getServer()) || build.departureDue(bot));

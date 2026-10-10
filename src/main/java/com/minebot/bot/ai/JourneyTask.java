@@ -122,12 +122,21 @@ public class JourneyTask extends Task {
 
     /** Time for a journey? (The first one is planned some days after moving in.) */
     public static boolean wanted(BotPlayer bot) {
-        if (bot.journey() != null) {
+        Journey going = bot.journey();
+        if (going != null) {
+            if (going.stage.ordinal() < Stage.BACK.ordinal() && bot.every("journey order check", 20 * 30, () -> GreatBuildTask.orderShort(bot))) {
+                // (the order for the Great Build is still short: home to see to it, not on and on after diamonds - Calcite)
+                bot.debug("journey: the Great Build order isn't ready; heading home");
+                going.stage = Stage.BACK;
+            }
             return true;
         }
         BotMemory memory = bot.memory();
         if (GreatBuildTask.isAway(bot) || GreatBuildTask.sessionOn(bot)) {
             return false; // (the Great Build's days: no journeys)
+        }
+        if (bot.every("journey order check", 20 * 30, () -> GreatBuildTask.orderShort(bot))) {
+            return false; // (the order first)
         }
         if (!Home.isNear(bot, 128) || !Tools.has(bot, ItemTags.PICKAXES, Tools.Tier.STONE) || !Tools.hasWeapon(bot)
             || Inv.count(bot, Food::isCooked) < ROAD_FOOD) { // (not without food for the road)
