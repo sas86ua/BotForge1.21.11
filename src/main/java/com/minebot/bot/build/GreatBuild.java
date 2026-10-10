@@ -716,7 +716,7 @@ public final class GreatBuild extends SavedData {
                         continue;
                     }
                     BlockPos pos = worldPos(index);
-                    if (reachOnly && (pos.getY() > bot.getBlockY() + REACH_UP || pos.getY() < bot.getBlockY() - REACH_DOWN)) {
+                    if (reachOnly && bottomUp && (pos.getY() > bot.getBlockY() + REACH_UP || pos.getY() < bot.getBlockY() - REACH_DOWN)) {
                         continue;
                     }
                     LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
