@@ -129,14 +129,24 @@ public final class BlockPlacer {
                 var type = state.getValue(net.minecraft.world.level.block.SlabBlock.TYPE);
                 var doubled = net.minecraft.world.level.block.state.properties.SlabType.DOUBLE;
                 var bottom = net.minecraft.world.level.block.state.properties.SlabType.BOTTOM;
-                // (on its side, on top of a bottom one, under a top one: the two join into a whole block, the cell stays empty)
-                if (type != doubled && (direction.getAxis().isHorizontal() && type != bottom || direction == Direction.DOWN && type == bottom
-                    || direction == Direction.UP && type != bottom)) {
+                // (on top of a bottom one, under a top one: the two join into a whole block, the cell stays empty;
+                // on its side it's the height of the click that decides - see below)
+                if (type != doubled && (direction == Direction.DOWN && type == bottom || direction == Direction.UP && type != bottom)) {
                     continue;
                 }
             }
             Direction clickedFace = direction.getOpposite();
             Vec3 location = Vec3.atCenterOf(neighbour).add(Vec3.atLowerCornerOf(clickedFace.getUnitVec3i()).scale(0.5));
+            if (forSlab && direction.getAxis().isHorizontal() && state.getBlock() instanceof net.minecraft.world.level.block.SlabBlock) {
+                // (a click on the side of a slab joins it unless it's on the other half: bottom one - lower half, top one - upper;
+                // the new slab lies the same way, so a floor goes on in the row of the slabs already there)
+                var type = state.getValue(net.minecraft.world.level.block.SlabBlock.TYPE);
+                if (type == net.minecraft.world.level.block.state.properties.SlabType.TOP) {
+                    location = location.add(0, 0.4, 0);
+                } else if (type == net.minecraft.world.level.block.state.properties.SlabType.BOTTOM) {
+                    location = location.add(0, -0.4, 0);
+                } // (a double slab is a whole block: the middle of its face is fine)
+            }
             return new BlockHitResult(location, clickedFace, neighbour, false);
         }
         return null;
