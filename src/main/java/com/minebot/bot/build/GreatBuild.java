@@ -684,7 +684,7 @@ public final class GreatBuild extends SavedData {
         // Building: the lowest layer with anything still to put in, anywhere on the site, and the one above it - not the
         // lowest near the bot (up on the finished part it went for the top, climbing pillars to it to put them up and
         // take them down again)
-        int lowest = bottomUp ? lowestPendingLayer() : 0;
+        int lowest = bottomUp ? lowestPendingLayer(time) : 0;
         Job best = null;
         double bestScore = Double.MAX_VALUE;
         int firstStep = -1;
@@ -743,7 +743,20 @@ public final class GreatBuild extends SavedData {
     }
 
     /** The lowest layer with a block still to put in (what can't be had, or isn't asked for, doesn't hold the rest back). */
-    private int lowestPendingLayer() {
+    private int lowestLayer;
+    private long lowestLayerAt = Long.MIN_VALUE;
+
+    /** (Worked out once in a couple of seconds for everyone: every bot asking on every tick hung the server.) */
+    private int lowestPendingLayer(long time) {
+        if (time - lowestLayerAt < 40 && time >= lowestLayerAt) {
+            return lowestLayer;
+        }
+        lowestLayerAt = time;
+        lowestLayer = computeLowestPendingLayer();
+        return lowestLayer;
+    }
+
+    private int computeLowestPendingLayer() {
         Schematic schematic = plan;
         int layer = schematic.width() * schematic.length();
         int checked = 0;
