@@ -80,6 +80,31 @@ public final class Home {
         return CLUTTER.getOrDefault(bot.getUUID(), java.util.Set.of()).contains(pos);
     }
 
+    /**
+     * A furnace the bot has already: in its house, or by its workshop (the old hut's). A new one isn't put up while there
+     * is one (Steve put one by the wall of his new house, with the old house and the workshop both having theirs).
+     */
+    public static @org.jetbrains.annotations.Nullable BlockPos existingFurnace(BotPlayer bot, ServerLevel level) {
+        BotMemory memory = bot.memory();
+        var plan = memory.houseOrigin() != null ? com.minebot.bot.build.HousePlans.of(memory) : null;
+        if (plan != null) {
+            for (var cell : plan.cells()) {
+                if (cell.kind() != '.' && level.isLoaded(cell.pos()) && level.getBlockState(cell.pos()).is(net.minecraft.world.level.block.Blocks.FURNACE)) {
+                    return cell.pos().immutable();
+                }
+            }
+        }
+        BlockPos workshop = memory.workshop();
+        if (workshop != null && level.isLoaded(workshop)) {
+            for (BlockPos pos : BlockPos.betweenClosed(workshop.offset(-8, -2, -8), workshop.offset(8, 2, 8))) {
+                if (level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.FURNACE)) {
+                    return pos.immutable();
+                }
+            }
+        }
+        return null;
+    }
+
     /** How far round the house (and the old hut) the steps, pillars and ladders put up to build it are taken down. */
     private static final int TIDY_RANGE = 6;
     private static final int TIDY_HEIGHT = 40;
@@ -178,6 +203,15 @@ public final class Home {
             return;
         }
         noteStrays(bot, level, plan);
+        // The furnace it remembers stands outside the finished house (put up at the hut, or by the wall): the one inside, if
+        // there's one, is its furnace; else it forgets that one and puts a new one in the house
+        BlockPos furnace = memory.furnace();
+        if (furnace != null && level.isLoaded(furnace) && !plan.inFootprint(furnace)) {
+            BlockPos inside = existingFurnace(bot, level);
+            bot.debug("my furnace at {} is outside the house; {}", furnace.toShortString(),
+                inside != null ? "using the one at " + inside.toShortString() : "putting one in the house");
+            memory.setFurnace(inside);
+        }
         for (var cell : plan.cells()) {
             if (cell.kind() != '.' || cell.layer() == 0 || !level.isLoaded(cell.pos())) {
                 continue;

@@ -89,6 +89,16 @@ public class FurnishTask extends Task {
         if (level == null || memory.bed() == null) {
             return Status.FAILURE;
         }
+        if (only == Items.FURNACE && !spare || only == null && memory.furnace() == null) {
+            // (one it has already - in the house, by the workshop - is its furnace: no new one beside the wall)
+            BlockPos known = memory.furnace() == null ? Home.existingFurnace(bot, level) : null;
+            if (known != null) {
+                memory.setFurnace(known);
+                if (only != null) {
+                    return Status.SUCCESS;
+                }
+            }
+        }
         if (only != null) {
             if (placedOnly) {
                 return Status.SUCCESS;
