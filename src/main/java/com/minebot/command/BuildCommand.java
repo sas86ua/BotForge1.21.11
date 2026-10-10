@@ -169,6 +169,7 @@ final class BuildCommand {
         if (!build.failures().isEmpty()) {
             text.append("\n bots couldn't get: ").append(build.failures());
         }
+        text.append("\n ").append(build.writeOffText());
         reply(ctx, text.toString());
         return 1;
     }
