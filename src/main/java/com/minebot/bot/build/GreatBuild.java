@@ -380,6 +380,9 @@ public final class GreatBuild extends SavedData {
 
     /** Starts a session right away (an admin's "now"). */
     public void startSession(MinecraftServer server) {
+        floorLayer = 0; // (what was written off last time is tried again)
+        layerGiveUps.clear();
+        lowestLayerAt = Long.MIN_VALUE;
         long now = server.overworld().getDayTime();
         sessionEnd = now + SESSION;
         nextDay = (now / DAY) + PERIOD / DAY;
@@ -760,7 +763,7 @@ public final class GreatBuild extends SavedData {
         Schematic schematic = plan;
         int layer = schematic.width() * schematic.length();
         int checked = 0;
-        for (int index = pending.nextSetBit(0); index >= 0 && checked < 20000; index = pending.nextSetBit(index + 1), checked++) {
+        for (int index = pending.nextSetBit(floorLayer * layer); index >= 0 && checked < 20000; index = pending.nextSetBit(index + 1), checked++) {
             LegacyBlocks.Spec spec = schematic.at(index);
             LegacyBlocks.Kind kind = spec.kind();
             if (kind == LegacyBlocks.Kind.AIR || kind == LegacyBlocks.Kind.SKIP) {
@@ -774,7 +777,7 @@ public final class GreatBuild extends SavedData {
             }
             return index / layer;
         }
-        return 0;
+        return floorLayer;
     }
 
     /**
@@ -832,8 +835,41 @@ public final class GreatBuild extends SavedData {
 
     /** Couldn't be done for now: left alone a while. */
     public void giveUp(BotPlayer bot, Job job) {
-        cooldowns.put(job.index(), bot.level().getGameTime() + COOLDOWN_TICKS);
+        long now = bot.level().getGameTime();
+        cooldowns.put(job.index(), now + COOLDOWN_TICKS);
         claims.remove(job.index());
+        noteGiveUp(bot, job, now);
+    }
+
+    /** Layers below this are written off for now: the bots in numbers couldn't get at them (see noteGiveUp). */
+    private int floorLayer;
+    private final Map<Integer, Map<UUID, Long>> layerGiveUps = new java.util.HashMap<>();
+    private static final int GIVE_UP_BOTS = 3;
+    private static final long GIVE_UP_WINDOW = 20L * 60 * 12;
+
+    /**
+     * The lowest layer to build in is too deep to get at (a pit under the finished part): three bots or more giving
+     * up on its cells within twelve minutes write it off - the building goes on from the layer above it, and if that
+     * can't be got at either, from the next, and so on - till the next session, when it's tried again.
+     */
+    private void noteGiveUp(BotPlayer bot, Job job, long now) {
+        if (job.type() == JobType.DIG || plan == null) {
+            return;
+        }
+        int size = plan.width() * plan.length();
+        int layer = job.index() / size;
+        if (layer != lowestPendingLayer(now)) {
+            return;
+        }
+        Map<UUID, Long> bots = layerGiveUps.computeIfAbsent(layer, l -> new java.util.HashMap<>());
+        bots.put(bot.getUUID(), now);
+        bots.values().removeIf(at -> now - at > GIVE_UP_WINDOW);
+        if (bots.size() >= GIVE_UP_BOTS) {
+            floorLayer = layer + 1;
+            layerGiveUps.clear();
+            lowestLayerAt = Long.MIN_VALUE;
+            LOGGER.info("Great Build: layer {} is out of the bots' reach; building on from layer {}", layer, floorLayer);
+        }
     }
 
     public void done(ServerLevel level, Job job) {
