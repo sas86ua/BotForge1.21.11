@@ -661,10 +661,20 @@ public final class GreatBuild extends SavedData {
         }
         // The lowest (or, digging, highest) layer with work, and a few above it: a cell close by a layer
         // up is better than walking across the site for the layer below (it walked more than it built)
+        // Building: the lowest layer with anything still to put in, anywhere on the site, and the one above it - not the
+        // lowest near the bot (up on the finished part it went for the top, climbing pillars to it to put them up and
+        // take them down again)
+        int lowest = bottomUp ? lowestPendingLayer() : 0;
         Job best = null;
         double bestScore = Double.MAX_VALUE;
         int firstStep = -1;
         for (int step = 0; step < schematic.height(); step++) {
+            if (bottomUp && step < lowest) {
+                continue;
+            }
+            if (bottomUp && step > lowest + 1) {
+                break;
+            }
             if (firstStep >= 0 && step > firstStep + LAYER_WINDOW) {
                 break;
             }
@@ -707,6 +717,28 @@ public final class GreatBuild extends SavedData {
             }
         }
         return best;
+    }
+
+    /** The lowest layer with a block still to put in (what can't be had, or isn't asked for, doesn't hold the rest back). */
+    private int lowestPendingLayer() {
+        Schematic schematic = plan;
+        int layer = schematic.width() * schematic.length();
+        int checked = 0;
+        for (int index = pending.nextSetBit(0); index >= 0 && checked < 20000; index = pending.nextSetBit(index + 1), checked++) {
+            LegacyBlocks.Spec spec = schematic.at(index);
+            LegacyBlocks.Kind kind = spec.kind();
+            if (kind == LegacyBlocks.Kind.AIR || kind == LegacyBlocks.Kind.SKIP) {
+                continue;
+            }
+            if (kind == LegacyBlocks.Kind.EXACT || kind == LegacyBlocks.Kind.COMPANION) {
+                Item item = itemFor(spec);
+                if (failures.getOrDefault(key(item), 0) >= 3) {
+                    continue;
+                }
+            }
+            return index / layer;
+        }
+        return 0;
     }
 
     /**
