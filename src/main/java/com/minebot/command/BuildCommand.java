@@ -47,6 +47,7 @@ final class BuildCommand {
             .then(Commands.literal("status").executes(BuildCommand::status))
             .then(Commands.literal("orders").executes(BuildCommand::orders))
             .then(Commands.literal("materials").executes(BuildCommand::materials))
+            .then(Commands.literal("prep").executes(BuildCommand::prep))
             .then(Commands.literal("go")
                 .executes(ctx -> sendEarly(ctx, null))
                 .then(Commands.argument("bot", StringArgumentType.word())
@@ -216,6 +217,50 @@ final class BuildCommand {
             (way ? can : cannot).append(GreatBuild.key(item).replace("minecraft:", "")).append(" ").append(entry.getValue()).append(", ");
         }
         reply(ctx, "Great Build materials (asked " + bot.getPlainTextName() + "):\n can make: " + can + "\n no way: " + cannot);
+        return 1;
+    }
+
+    /** How far each bot is with its order for the next session: what it has (on it and in its chests) of what it was asked for. */
+    private static int prep(CommandContext<CommandSourceStack> ctx) {
+        GreatBuild build = existing(ctx);
+        if (build == null) {
+            return 0;
+        }
+        StringBuilder text = new StringBuilder("Great Build, orders for the next session (have/asked):");
+        int haveTotal = 0;
+        int askedTotal = 0;
+        for (BotPlayer bot : BotManager.all()) {
+            Map<Item, Integer> order = build.orderOf(bot.getUUID());
+            if (order.isEmpty()) {
+                continue;
+            }
+            net.minecraft.server.level.ServerLevel level = bot.level();
+            List<net.minecraft.world.Container> boxes = new ArrayList<>();
+            java.util.Set<BlockPos> seen = new java.util.HashSet<>();
+            for (BlockPos pos : bot.memory().chests()) {
+                if (seen.add(pos) && level.isLoaded(pos) && level.getBlockEntity(pos) instanceof net.minecraft.world.Container box) {
+                    boxes.add(box);
+                }
+            }
+            text.append("\n ").append(bot.getPlainTextName()).append(": ");
+            boolean first = true;
+            for (Map.Entry<Item, Integer> entry : order.entrySet()) {
+                Item item = entry.getKey();
+                int have = com.minebot.bot.action.Inv.count(bot, stack -> stack.is(item));
+                for (net.minecraft.world.Container box : boxes) {
+                    have += com.minebot.bot.ai.Stash.count(box, stack -> stack.is(item));
+                }
+                int asked = entry.getValue();
+                haveTotal += Math.min(have, asked);
+                askedTotal += asked;
+                text.append(first ? "" : ", ").append(GreatBuild.key(item).replace("minecraft:", "")).append(" ")
+                    .append(Math.min(have, asked)).append("/").append(asked);
+                first = false;
+            }
+        }
+        text.append("\n total ").append(haveTotal).append("/").append(askedTotal).append(" (")
+            .append(askedTotal == 0 ? 100 : haveTotal * 100 / askedTotal).append("%)");
+        reply(ctx, text.toString());
         return 1;
     }
 
