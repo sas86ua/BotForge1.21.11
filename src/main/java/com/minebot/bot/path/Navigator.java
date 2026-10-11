@@ -214,8 +214,34 @@ public class Navigator {
         // Standing on a slab, path block, farmland...: the feet are inside that block's
         // space, but for paths the bot is on top of it, like on any other floor
         BlockState state = bot.level().getBlockState(feet);
-        if (bot.onGround() && !BlockRules.isPassable(bot.level(), feet, state) && BlockRules.isStandable(bot.level(), feet, state)) {
+        if (BlockRules.isPassable(bot.level(), feet, state)) {
+            return feet;
+        }
+        var shape = state.getCollisionShape(bot.level(), feet);
+        boolean onTop = shape.isEmpty() || bot.getY() >= feet.getY() + shape.max(net.minecraft.core.Direction.Axis.Y) - 0.05;
+        if (bot.onGround() && onTop && BlockRules.isStandable(bot.level(), feet, state)) {
             return feet.above();
+        }
+        if (!onTop) {
+            // Beside a fence post, not on it: its middle over the corner of the post's block (Zealot, squeezed into the
+            // corner of his sheep pen; its ways all set off from outside the fence, through it). The open block it's in
+            BlockPos best = null;
+            double bestDistance = Double.MAX_VALUE;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    BlockPos side = feet.offset(dx, 0, dz);
+                    if ((dx != 0 || dz != 0) && BlockRules.isPassable(bot.level(), side, bot.level().getBlockState(side))) {
+                        double distance = Vec3.atBottomCenterOf(side).distanceToSqr(bot.getX(), side.getY(), bot.getZ());
+                        if (distance < bestDistance) {
+                            bestDistance = distance;
+                            best = side;
+                        }
+                    }
+                }
+            }
+            if (best != null) {
+                return best;
+            }
         }
         return feet;
     }
