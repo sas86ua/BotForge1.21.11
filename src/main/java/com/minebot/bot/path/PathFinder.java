@@ -275,7 +275,25 @@ public class PathFinder {
         if (com.minebot.bot.ai.SheepPenTask.nearPen(level, cursor.set(x, y, z), 1)) {
             return false; // (not in a sheep pen nor on its fence: a block there was the sheep's way out)
         }
+        if (!options.escape() && nearDoor(x, y, z)) {
+            return false; // (no pillar or block by a doorway: it was left there in the way in - Glowstone, at the village's door)
+        }
         return options.escape() || !ProtectedAreas.isProtected(level, cursor.set(x, y, z));
+    }
+
+    /** A door or gate right beside (a level up or down too). */
+    private boolean nearDoor(int x, int y, int z) {
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    BlockState state = state(x + dx, y + dy, z + dz);
+                    if (state != null && (state.is(BlockTags.DOORS) || state.is(BlockTags.FENCE_GATES))) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /** A building within a couple of blocks: up its wall on a ladder rather than on a pillar beside it. */
