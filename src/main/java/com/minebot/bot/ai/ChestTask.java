@@ -94,7 +94,7 @@ public class ChestTask extends Task {
         return candidates;
     }
 
-    private static long siteChestsAt = Long.MIN_VALUE;
+    private static long siteChestsAt = Long.MIN_VALUE / 4; // (not MIN_VALUE itself: "now - it" would overflow and look fresh for ever)
     private static List<BlockPos> siteChests = List.of();
 
     /** (Worked out once in two seconds for all: the planner asks for it again and again.) */

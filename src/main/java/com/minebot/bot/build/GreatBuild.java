@@ -848,7 +848,7 @@ public final class GreatBuild extends SavedData {
 
     /** The lowest layer with a block still to put in (what can't be had, or isn't asked for, doesn't hold the rest back). */
     private int lowestLayer;
-    private long lowestLayerAt = Long.MIN_VALUE;
+    private long lowestLayerAt = Long.MIN_VALUE / 4; // (not MIN_VALUE itself: "time - it" overflowed, and the layer worked out once was kept for ever)
 
     /** (Worked out once in a couple of seconds for everyone: every bot asking on every tick hung the server.) */
     private int lowestPendingLayer(long time) {
@@ -987,7 +987,7 @@ public final class GreatBuild extends SavedData {
         if (bots.size() >= GIVE_UP_BOTS) {
             floorLayer = layer + 1;
             layerGiveUps.clear();
-            lowestLayerAt = Long.MIN_VALUE;
+            lowestLayerAt = Long.MIN_VALUE / 4;
             setDirty();
             LOGGER.info("Great Build: layer {} is out of the bots' reach; building on from layer {}", layer, floorLayer);
         }

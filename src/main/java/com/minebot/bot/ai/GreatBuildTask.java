@@ -316,7 +316,7 @@ public class GreatBuildTask extends Task {
     /** With the site dug out nearly (97%), only a quarter of them dig: the rest of what's left is finishing touches. */
     private static final double DIGGERS_LATE = 0.25;
     private static final double SITE_NEARLY_DUG = 97.0;
-    private static long shareAt = Long.MIN_VALUE;
+    private static long shareAt = Long.MIN_VALUE / 4; // (not MIN_VALUE itself: "now - it" would overflow)
     private static double share = DIGGERS;
 
     private static double diggerShare(BotPlayer bot) {
