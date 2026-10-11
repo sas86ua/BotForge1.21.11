@@ -523,12 +523,12 @@ public class Navigator {
                             if (!bot.level().noCollision(other, moved)) {
                                 continue;
                             }
-                            // (a spot with floor under it, or a short drop: a fall of three blocks is better than both stuck)
+                            // (a spot with floor under it, or a short drop: a fall of a few blocks is better than both stuck)
                             int drop = 0;
-                            while (drop <= 3 && bot.level().noCollision(other, moved.move(0.0, -(drop + 1.0), 0.0))) {
+                            while (drop <= 6 && bot.level().noCollision(other, moved.move(0.0, -(drop + 1.0), 0.0))) {
                                 drop++;
                             }
-                            if (drop <= 3) {
+                            if (drop <= 6) {
                                 other.teleportTo(other.getX() + side[0] * 1.6, other.getY() - drop, other.getZ() + side[1] * 1.6);
                                 break;
                             }
