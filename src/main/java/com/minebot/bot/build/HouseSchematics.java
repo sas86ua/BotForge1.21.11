@@ -197,7 +197,11 @@ public final class HouseSchematics {
             return null;
         }
         Block substitute = SUBSTITUTES.get(block);
-        if (substitute == null && path.endsWith("stained_glass_pane")) {
+        if (substitute == null && path.endsWith("_carpet") && !path.equals("white_carpet") && !path.equals("moss_carpet")) {
+            substitute = Blocks.WHITE_CARPET; // (a dye there may be no way to: Redstone, a day after light grey dye for his floor)
+        } else if (substitute == null && path.endsWith("_wool") && !path.equals("white_wool")) {
+            substitute = Blocks.WHITE_WOOL;
+        } else if (substitute == null && path.endsWith("stained_glass_pane")) {
             substitute = Blocks.GLASS_PANE;
         } else if (substitute == null && path.endsWith("stained_glass")) {
             substitute = Blocks.GLASS;
