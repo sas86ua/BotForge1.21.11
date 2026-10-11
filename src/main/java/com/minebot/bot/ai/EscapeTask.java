@@ -41,7 +41,10 @@ public class EscapeTask extends Task {
     public static boolean wanted(BotPlayer bot) {
         if (!underground(bot)) {
             // (shut in a room above ground: nowhere to go, its way out walled up - Glowstone, in its own house)
-            return bot.recentNavFailures(20 * 60) >= 4 && bot.stillSeconds() >= 20 && enclosure(bot) != null;
+            // (or standing there a minute with nothing to do: shut in by the others' building at the Great Build, it
+            // had stopped trying - idle, no failing paths to count - and sat in its pit for good - Tuff)
+            return bot.stillSeconds() >= 20 && (bot.recentNavFailures(20 * 60) >= 4 || bot.stillSeconds() >= 60)
+                && bot.every("sealed in", 100, () -> enclosure(bot) != null);
         }
         boolean drowning = bot.isUnderWater() && bot.getAirSupply() < bot.getMaxAirSupply() / 2;
         // (paths failing now and then is normal down a mine: stuck means going nowhere for a minute too)
