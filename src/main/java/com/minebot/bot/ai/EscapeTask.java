@@ -69,8 +69,12 @@ public class EscapeTask extends Task {
      */
     private static boolean boxedIn(BotPlayer bot) {
         ServerLevel level = bot.level();
+        // (where it stands, mid-jump too: it hops there trying to pillar up, and the check, made in the air, never held)
         BlockPos feet = bot.blockPosition();
-        if (!bot.onGround() || bot.onClimbable() || bot.isInWater()) {
+        for (int k = 0; k < 2 && isOpen(level, feet.below()); k++) {
+            feet = feet.below();
+        }
+        if (isOpen(level, feet.below()) || bot.onClimbable() || bot.isInWater()) {
             return false;
         }
         for (Direction direction : Direction.Plane.HORIZONTAL) {
