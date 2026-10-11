@@ -150,7 +150,8 @@ public class DismantleTask extends Task {
     private static boolean isOurBlock(BotPlayer bot, BlockPos pos) {
         return bot.level().isLoaded(pos) && (Inv.isScaffold(new ItemStack(bot.level().getBlockState(pos).getBlock().asItem()))
             || Home.isClutter(bot, pos) && (bot.level().getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.AbstractFurnaceBlock
-                || bot.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE)) // (outside the house, or in the way in it)
+                || bot.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE)
+                || bot.level().getBlockState(pos).is(net.minecraft.tags.BlockTags.LOGS)) // (outside the house, or in the way in it; a stump)
             || bot.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.LADDER)); // (put up to climb a wall)
     }
 

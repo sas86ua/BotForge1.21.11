@@ -141,16 +141,17 @@ public final class Home {
                     if (!level.isLoaded(at.set(x, floor, z))) {
                         continue;
                     }
-                    int yMin = area == areas.get(0) ? floor : Math.max(level.getMinY(), (hut != null ? hut.getY() : floor) - 1);
+                    int yMin = area == areas.get(0) ? floor - 8 : Math.max(level.getMinY(), (hut != null ? hut.getY() : floor) - 1);
                     for (int y = yMin; y <= yMin + TIDY_HEIGHT && found < 150; y++) {
                         at.set(x, y, z);
                         net.minecraft.world.level.block.state.BlockState state = level.getBlockState(at);
                         boolean ladder = state.is(net.minecraft.world.level.block.Blocks.LADDER);
-                        if (!ladder && !com.minebot.bot.action.Inv.isScaffold(new net.minecraft.world.item.ItemStack(state.getBlock().asItem()))) {
+                        if (!ladder && !state.is(net.minecraft.tags.BlockTags.LOGS)
+                            && !com.minebot.bot.action.Inv.isScaffold(new net.minecraft.world.item.ItemStack(state.getBlock().asItem()))) {
                             continue;
                         }
                         BlockPos pos = at.immutable();
-                        if (planned.contains(pos) || bot.pillars().contains(pos) || isClutter(bot, pos) || stray(level, pos, ladder, plan, floor) == false) {
+                        if (planned.contains(pos) || bot.pillars().contains(pos) || isClutter(bot, pos) || stray(level, pos, ladder, plan, floor, area == areas.get(0)) == false) {
                             continue;
                         }
                         bot.debug("a stray {} at {} by the house; taking it down", state.getBlock().getName().getString(), pos.toShortString());
@@ -163,9 +164,12 @@ public final class Home {
         }
     }
 
-    private static boolean stray(ServerLevel level, BlockPos pos, boolean ladder, com.minebot.bot.build.HousePlan plan, int floor) {
+    /** @param byHouse round the house itself (not the old hut, which may be of cobblestone) */
+    private static boolean stray(ServerLevel level, BlockPos pos, boolean ladder, com.minebot.bot.build.HousePlan plan, int floor, boolean byHouse) {
+        net.minecraft.world.level.block.state.BlockState self = level.getBlockState(pos);
+        // (not "natural terrain only": cobblestone isn't, and none of it was ever taken)
         if (com.minebot.bot.build.GreatBuild.nearSite(pos) || com.minebot.bot.world.ProtectedAreas.isProtected(level, pos)
-            || !com.minebot.bot.world.BlockRules.canBreak(level, pos, level.getBlockState(pos))) {
+            || self.getDestroySpeed(level, pos) < 0 || self.hasBlockEntity()) {
             return false;
         }
         // (the path of ground round the house, at its floor)
@@ -190,7 +194,26 @@ public final class Home {
         net.minecraft.world.level.block.state.BlockState up = level.getBlockState(above);
         boolean carries = !(up.isAir() || up.canBeReplaced() || up.is(net.minecraft.world.level.block.Blocks.LADDER)
             || com.minebot.bot.action.Inv.isScaffold(new net.minecraft.world.item.ItemStack(up.getBlock().asItem())));
-        return !carries && (ladder || open >= 3);
+        if (carries) {
+            return false;
+        }
+        if (self.is(net.minecraft.tags.BlockTags.LOGS)) {
+            if (!byHouse) {
+                return false;
+            }
+            // A stump: a log by itself, no tree to it (no logs beside, above or below, no leaves near)
+            for (BlockPos near : BlockPos.betweenClosed(pos.offset(-2, -1, -2), pos.offset(2, 3, 2))) {
+                net.minecraft.world.level.block.state.BlockState other = level.getBlockState(near);
+                if (!near.equals(pos) && (other.is(net.minecraft.tags.BlockTags.LEAVES) || other.is(net.minecraft.tags.BlockTags.LOGS))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        // Cobblestone never lies about by itself: any of it showing, not in the plan, was put there by a bot
+        boolean madeStone = self.is(net.minecraft.world.level.block.Blocks.COBBLESTONE) || self.is(net.minecraft.world.level.block.Blocks.COBBLED_DEEPSLATE);
+        boolean showing = up.isAir() || up.canBeReplaced() || open > 0;
+        return ladder || open >= 3 || byHouse && madeStone && showing;
     }
 
     /**

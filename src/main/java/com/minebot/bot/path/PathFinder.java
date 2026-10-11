@@ -467,6 +467,17 @@ public class PathFinder {
             && com.minebot.bot.ai.SheepPenTask.isGate(level.getServer(), x, y, z, bot.getUUID())) {
             return INF; // (another's sheep pen gate: no way through, the sheep would get out)
         }
+        if (state.is(net.minecraft.tags.BlockTags.FENCE_GATES) && state.hasProperty(net.minecraft.world.level.block.FenceGateBlock.FACING)) {
+            // A gate in a balcony's railing: a drop on its other side, not a way out (Copper kept trying it from his house)
+            Direction facing = state.getValue(net.minecraft.world.level.block.FenceGateBlock.FACING);
+            for (Direction side : new Direction[] {facing, facing.getOpposite()}) {
+                BlockState floor = state(x + side.getStepX(), y - 1, z + side.getStepZ());
+                BlockState under = state(x + side.getStepX(), y - 2, z + side.getStepZ());
+                if (floor != null && floor.isAir() && under != null && under.isAir()) {
+                    return INF;
+                }
+            }
+        }
         if (passable(x, y, z, state)) {
             return 0;
         }
