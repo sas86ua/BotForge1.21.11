@@ -43,8 +43,14 @@ public class EscapeTask extends Task {
             // (shut in a room above ground: nowhere to go, its way out walled up - Glowstone, in its own house)
             // (or standing there a minute with nothing to do: shut in by the others' building at the Great Build, it
             // had stopped trying - idle, no failing paths to count - and sat in its pit for good - Tuff)
+            if (boxedIn(bot) && bot.stillSeconds() >= 30 && bot.recentNavFailures(20 * 60) >= 3) {
+                return true; // (see boxedIn)
+            }
             return bot.stillSeconds() >= 20 && (bot.recentNavFailures(20 * 60) >= 4 || bot.stillSeconds() >= 60)
                 && bot.every("sealed in", 100, () -> enclosure(bot) != null);
+        }
+        if (boxedIn(bot) && bot.stillSeconds() >= 30 && bot.recentNavFailures(20 * 60) >= 3) {
+            return true; // (see boxedIn)
         }
         boolean drowning = bot.isUnderWater() && bot.getAirSupply() < bot.getMaxAirSupply() / 2;
         // (paths failing now and then is normal down a mine: stuck means going nowhere for a minute too)
@@ -55,6 +61,89 @@ public class EscapeTask extends Task {
         boolean goingNowhere = bot.areaSeconds() >= 180 && goal != null && goal.distance(feet.getX(), feet.getY(), feet.getZ()) > 16;
         return drowning || bot.recentNavFailures(20 * 60) >= 3 && bot.stillSeconds() >= 60 || goingNowhere;
     }
+
+    /**
+     * Standing on a block in a hole with no step to take: room beside it at its feet, but a ceiling over its head there,
+     * and nothing a block up to climb to (Obsidian, on a pillar top under the floor of the Great Build, its head in a
+     * gap: a block more under it, or one less, and it walks off).
+     */
+    private static boolean boxedIn(BotPlayer bot) {
+        ServerLevel level = bot.level();
+        BlockPos feet = bot.blockPosition();
+        if (!bot.onGround() || bot.onClimbable() || bot.isInWater()) {
+            return false;
+        }
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos side = feet.relative(direction);
+            if (isOpen(level, side) && isOpen(level, side.above())) {
+                return false; // (a step along, or off and down)
+            }
+            if (!isOpen(level, side) && isOpen(level, side.above()) && isOpen(level, side.above(2)) && isOpen(level, feet.above(2))) {
+                return false; // (a step up)
+            }
+        }
+        return true;
+    }
+
+    /** Out of the hole: the block under it broken (down a level, where there's head room), or one more put under it. */
+    private Status unbox() {
+        ServerLevel level = bot.level();
+        if (bot.onGround() && !boxedIn(bot)) {
+            bot.debug("out of the hole");
+            bot.clearNavFailures();
+            return Status.SUCCESS;
+        }
+        if (++ticks > MAX_TICKS) {
+            return Status.FAILURE;
+        }
+        if (breaker.target() != null && breaker.tick() == BlockBreaker.Result.RUNNING) {
+            return Status.RUNNING;
+        }
+        if (bot.onGround() || pillarBase == null) {
+            pillarBase = bot.blockPosition();
+        }
+        BlockPos feet = pillarBase;
+        BlockPos below = feet.below();
+        // Down: the floor broken, if there's ground under it (no long fall) and no water or lava
+        boolean landing = false;
+        for (int k = 2; k <= 4 && !landing; k++) {
+            BlockPos at = feet.below(k);
+            if (!level.getFluidState(at).isEmpty()) {
+                break;
+            }
+            landing = !isOpen(level, at);
+        }
+        if (!down && landing && mustBreak(level, below) && level.getFluidState(below).isEmpty()) {
+            bot.debug("in a hole with no step to take; breaking the block under me at {}", below.toShortString());
+            bot.controller().releaseInputs();
+            bot.controller().lookAt(Vec3.atCenterOf(below));
+            breaker.start(below);
+            down = true;
+            return Status.RUNNING;
+        }
+        // Up: a block put under it as it jumps (room over its head first)
+        BlockPos overHead = feet.above(2);
+        if (!isOpen(level, overHead)) {
+            if (!mustBreak(level, overHead)) {
+                return Status.FAILURE;
+            }
+            bot.controller().lookAt(Vec3.atCenterOf(overHead));
+            breaker.start(overHead);
+            return Status.RUNNING;
+        }
+        bot.controller().hold(Vec3.atBottomCenterOf(feet));
+        bot.setXRot(90.0F);
+        bot.setJumping(true);
+        if (bot.getY() > feet.getY() + 1.0 && level.getBlockState(feet).canBeReplaced()
+            && !com.minebot.bot.action.BlockPlacer.place(bot, feet, Inv::isScaffold) && Inv.count(bot, Inv::isScaffold) == 0) {
+            return Status.FAILURE;
+        }
+        return Status.RUNNING;
+    }
+
+    private boolean boxed;
+    /** Tried the way down already (the block under it broken): up from here on. */
+    private boolean down;
 
     public static boolean underground(BotPlayer bot) {
         ServerLevel level = bot.level();
@@ -154,6 +243,12 @@ public class EscapeTask extends Task {
 
     @Override
     public Status tick() {
+        if (ticks == 0 && !boxed && !sealed && boxedIn(bot)) {
+            boxed = true;
+        }
+        if (boxed) {
+            return unbox();
+        }
         if (!sealed && !underground(bot)) {
             if (ticks == 0) {
                 java.util.Set<BlockPos> inside = enclosure(bot);
