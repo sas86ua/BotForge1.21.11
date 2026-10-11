@@ -113,7 +113,10 @@ public class EscapeTask extends Task {
             }
             landing = !isOpen(level, at);
         }
-        if (!down && landing && mustBreak(level, below) && level.getFluidState(below).isEmpty()) {
+        // (open sky over its head: up and out is the way - down into the hollow under the Great Build's floor, Obsidian
+        // only climbed back onto the same block, the hole over it its one way out)
+        boolean skyOver = isOpen(level, feet.above(2)) && level.canSeeSky(feet.above(2));
+        if (!down && !skyOver && landing && mustBreak(level, below) && level.getFluidState(below).isEmpty()) {
             bot.debug("in a hole with no step to take; breaking the block under me at {}", below.toShortString());
             bot.controller().releaseInputs();
             bot.controller().lookAt(Vec3.atCenterOf(below));
