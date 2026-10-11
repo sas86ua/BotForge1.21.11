@@ -517,16 +517,15 @@ public class Navigator {
                     boolean otherIdle = other instanceof BotPlayer ob && (!ob.navigator().isActive() || Inv.count(ob, Inv::isScaffold) == 0);
                     if (otherIdle) {
                         // (one that's standing there with no way up of its own - no blocks - is pushed aside: it won't move for us)
-                        double dx = other.getX() - bot.getX();
-                        double dz = other.getZ() - bot.getZ();
-                        double length = Math.sqrt(dx * dx + dz * dz);
-                        if (length < 0.05) {
-                            dx = 1;
-                            dz = 0;
-                            length = 1;
+                        // (a push doesn't last: its own controls win; set down on the nearest free spot beside instead)
+                        for (int[] side : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1}}) {
+                            net.minecraft.world.phys.AABB moved = other.getBoundingBox().move(side[0] * 1.6, 0.0, side[1] * 1.6);
+                            if (bot.level().noCollision(other, moved)
+                                && !bot.level().noCollision(other, moved.move(0.0, -0.5, 0.0))) {
+                                other.teleportTo(other.getX() + side[0] * 1.6, other.getY(), other.getZ() + side[1] * 1.6);
+                                break;
+                            }
                         }
-                        other.setDeltaMovement(dx / length * 0.35, 0.0, dz / length * 0.35);
-                        other.hurtMarked = true;
                         continue;
                     }
                     if (bot.getUUID().compareTo(other.getUUID()) > 0) {
