@@ -172,6 +172,9 @@ public class PathFinder {
         for (Direction direction : Direction.Plane.HORIZONTAL) {
             int tx = x + direction.getStepX();
             int tz = z + direction.getStepZ();
+            if (doorAcross(x, y, z, direction) || doorAcross(tx, y, tz, direction)) {
+                continue; // (in or out of a doorway sideways: the open door's leaf is there - it pushed against it for good)
+            }
             expandSameLevel(from, tx, y, tz);
             expandAscend(from, x, y, z, tx, tz);
             if (options.canBreak() && !inWater) {
@@ -179,6 +182,9 @@ public class PathFinder {
             }
         }
         for (int[] d : DIAGONALS) {
+            if (isDoor(x, y, z) || isDoor(x + d[0], y, z + d[1]) || isDoor(x + d[0], y, z) || isDoor(x, y, z + d[1])) {
+                continue; // (no corner cut through a doorway)
+            }
             expandDiagonal(from, x, y, z, x + d[0], z + d[1]);
         }
 
@@ -225,6 +231,18 @@ public class PathFinder {
         if (below != null && BlockRules.isClimbable(below)) {
             add(from, x, y - 1, z, CLIMB, Move.CLIMB_DOWN);
         }
+    }
+
+    private boolean isDoor(int x, int y, int z) {
+        BlockState state = state(x, y, z);
+        return state != null && state.is(BlockTags.DOORS);
+    }
+
+    /** A door in this cell that doesn't open this way: through it only straight, along its facing. */
+    private boolean doorAcross(int x, int y, int z, Direction direction) {
+        BlockState state = state(x, y, z);
+        return state != null && state.is(BlockTags.DOORS) && state.hasProperty(net.minecraft.world.level.block.DoorBlock.FACING)
+            && state.getValue(net.minecraft.world.level.block.DoorBlock.FACING).getAxis() != direction.getAxis();
     }
 
     private void expandSameLevel(Node from, int tx, int y, int tz) {
