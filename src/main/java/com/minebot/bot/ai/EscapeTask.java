@@ -43,13 +43,13 @@ public class EscapeTask extends Task {
             // (shut in a room above ground: nowhere to go, its way out walled up - Glowstone, in its own house)
             // (or standing there a minute with nothing to do: shut in by the others' building at the Great Build, it
             // had stopped trying - idle, no failing paths to count - and sat in its pit for good - Tuff)
-            if (boxedIn(bot) && bot.stillSeconds() >= 30 && bot.recentNavFailures(20 * 60) >= 3) {
+            if (bot.areaSeconds() >= 60 && bot.recentNavFailures(20 * 60) >= 3 && boxedIn(bot)) { // (in the area: hopping there it is never "still")
                 return true; // (see boxedIn)
             }
             return bot.stillSeconds() >= 20 && (bot.recentNavFailures(20 * 60) >= 4 || bot.stillSeconds() >= 60)
                 && bot.every("sealed in", 100, () -> enclosure(bot) != null);
         }
-        if (boxedIn(bot) && bot.stillSeconds() >= 30 && bot.recentNavFailures(20 * 60) >= 3) {
+        if (bot.areaSeconds() >= 60 && bot.recentNavFailures(20 * 60) >= 3 && boxedIn(bot)) { // (in the area: hopping there it is never "still")
             return true; // (see boxedIn)
         }
         boolean drowning = bot.isUnderWater() && bot.getAirSupply() < bot.getMaxAirSupply() / 2;
@@ -138,12 +138,23 @@ public class EscapeTask extends Task {
             breaker.start(overHead);
             return Status.RUNNING;
         }
+        if (Inv.count(bot, Inv::isScaffold) == 0) {
+            // Nothing to put under it: a block of the hole's side broken first, for one (it falls by its feet)
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                BlockPos side = feet.above().relative(direction);
+                if (!isOpen(level, side) && mustBreak(level, side)) {
+                    bot.controller().lookAt(Vec3.atCenterOf(side));
+                    breaker.start(side);
+                    return Status.RUNNING;
+                }
+            }
+            return ++failures > 40 ? Status.FAILURE : Status.RUNNING;
+        }
         bot.controller().hold(Vec3.atBottomCenterOf(feet));
         bot.setXRot(90.0F);
         bot.setJumping(true);
-        if (bot.getY() > feet.getY() + 1.0 && level.getBlockState(feet).canBeReplaced()
-            && !com.minebot.bot.action.BlockPlacer.place(bot, feet, Inv::isScaffold) && Inv.count(bot, Inv::isScaffold) == 0) {
-            return Status.FAILURE;
+        if (bot.getY() > feet.getY() + 1.0 && level.getBlockState(feet).canBeReplaced()) {
+            com.minebot.bot.action.BlockPlacer.place(bot, feet, Inv::isScaffold);
         }
         return Status.RUNNING;
     }
