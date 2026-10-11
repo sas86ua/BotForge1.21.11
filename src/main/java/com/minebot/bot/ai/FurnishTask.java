@@ -463,7 +463,7 @@ public class FurnishTask extends Task {
                 BlockPos next = pos.relative(direction);
                 if (Math.abs(next.getX() - anchor.getX()) > radius || Math.abs(next.getZ() - anchor.getZ()) > radius
                     || room.contains(next) || isWall(level, next) || isWall(level, next.above())
-                    || level.getBlockState(next).is(BlockTags.DOORS)) {
+                    || level.getBlockState(next).is(BlockTags.DOORS) || level.getBlockState(next).is(BlockTags.FENCE_GATES)) {
                     continue;
                 }
                 room.add(next);
@@ -532,10 +532,20 @@ public class FurnishTask extends Task {
         return false;
     }
 
-    private static boolean nextToDoor(ServerLevel level, BlockPos pos) {
+    /** Between two walls facing each other (a corridor, a doorway a block wide). */
+    static boolean inPassage(ServerLevel level, BlockPos pos) {
+        return isWall(level, pos.north()) && isWall(level, pos.south()) && !isWall(level, pos.east()) && !isWall(level, pos.west())
+            || isWall(level, pos.east()) && isWall(level, pos.west()) && !isWall(level, pos.north()) && !isWall(level, pos.south());
+    }
+
+    static boolean nextToDoor(ServerLevel level, BlockPos pos) {
+        if (inPassage(level, pos)) {
+            return true; // (a way a block wide between two walls: the only way through, Steve walled himself in behind his furnace)
+        }
         for (Direction direction : Direction.Plane.HORIZONTAL) {
-            if (level.getBlockState(pos.relative(direction)).is(BlockTags.DOORS)) {
-                return true;
+            BlockState beside = level.getBlockState(pos.relative(direction));
+            if (beside.is(BlockTags.DOORS) || beside.is(BlockTags.FENCE_GATES)) {
+                return true; // (a gate between rooms too)
             }
             BlockState twoAway = level.getBlockState(pos.relative(direction, 2));
             if (twoAway.is(BlockTags.DOORS) && twoAway.hasProperty(DoorBlock.FACING)

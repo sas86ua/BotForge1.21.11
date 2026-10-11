@@ -48,7 +48,7 @@ public class DismantleTask extends Task {
         for (BlockPos pos : bot.pillars()) {
             double dx = pos.getX() + 0.5 - bot.getX();
             double dz = pos.getZ() + 0.5 - bot.getZ();
-            if (near(bot, pos) && bot.pillarAge(pos) >= 20 * 60 && dx * dx + dz * dz >= 9) {
+            if (near(bot, pos) && bot.pillarAge(pos) >= 20 * 60 && (dx * dx + dz * dz >= 9 || Home.isClutter(bot, pos) && !pos.equals(bot.blockPosition().below()))) {
                 return true;
             }
         }
@@ -149,7 +149,8 @@ public class DismantleTask extends Task {
 
     private static boolean isOurBlock(BotPlayer bot, BlockPos pos) {
         return bot.level().isLoaded(pos) && (Inv.isScaffold(new ItemStack(bot.level().getBlockState(pos).getBlock().asItem()))
-            || Home.isClutter(bot, pos) && bot.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.FURNACE) // (one left outside the house)
+            || Home.isClutter(bot, pos) && (bot.level().getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.AbstractFurnaceBlock
+                || bot.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE)) // (outside the house, or in the way in it)
             || bot.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.LADDER)); // (put up to climb a wall)
     }
 

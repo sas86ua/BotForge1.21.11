@@ -240,6 +240,21 @@ public final class Home {
                 continue;
             }
             net.minecraft.world.level.block.state.BlockState state = level.getBlockState(cell.pos());
+            if ((state.getBlock() instanceof net.minecraft.world.level.block.AbstractFurnaceBlock || state.is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE))
+                && FurnishTask.nextToDoor(level, cell.pos()) && !bot.pillars().contains(cell.pos())) {
+                // A furnace or table put down where the plan has it empty, in the way through (a doorway, behind a gate):
+                // taken out, and put somewhere else (Steve walled himself into his bedroom with his furnace)
+                bot.debug("a {} in the way in my house at {}; taking it out", state.getBlock().getName().getString(), cell.pos().toShortString());
+                if (cell.pos().equals(memory.furnace())) {
+                    memory.setFurnace(null);
+                }
+                if (cell.pos().equals(memory.craftingTable())) {
+                    memory.setCraftingTable(null);
+                }
+                bot.notePillar(cell.pos().immutable());
+                CLUTTER.computeIfAbsent(bot.getUUID(), u -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(cell.pos().immutable());
+                continue;
+            }
             if (!state.isAir() && com.minebot.bot.action.Inv.isScaffold(new net.minecraft.world.item.ItemStack(state.getBlock().asItem()))
                 && !bot.pillars().contains(cell.pos())) {
                 bot.debug("a block of {} in my house at {}; taking it out", state.getBlock().getName().getString(), cell.pos().toShortString());
