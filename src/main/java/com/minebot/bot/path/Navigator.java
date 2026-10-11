@@ -520,9 +520,16 @@ public class Navigator {
                         // (a push doesn't last: its own controls win; set down on the nearest free spot beside instead)
                         for (int[] side : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1}}) {
                             net.minecraft.world.phys.AABB moved = other.getBoundingBox().move(side[0] * 1.6, 0.0, side[1] * 1.6);
-                            if (bot.level().noCollision(other, moved)
-                                && !bot.level().noCollision(other, moved.move(0.0, -0.5, 0.0))) {
-                                other.teleportTo(other.getX() + side[0] * 1.6, other.getY(), other.getZ() + side[1] * 1.6);
+                            if (!bot.level().noCollision(other, moved)) {
+                                continue;
+                            }
+                            // (a spot with floor under it, or a short drop: a fall of three blocks is better than both stuck)
+                            int drop = 0;
+                            while (drop <= 3 && bot.level().noCollision(other, moved.move(0.0, -(drop + 1.0), 0.0))) {
+                                drop++;
+                            }
+                            if (drop <= 3) {
+                                other.teleportTo(other.getX() + side[0] * 1.6, other.getY() - drop, other.getZ() + side[1] * 1.6);
                                 break;
                             }
                         }
