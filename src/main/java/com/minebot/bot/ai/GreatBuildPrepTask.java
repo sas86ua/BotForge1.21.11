@@ -41,6 +41,8 @@ public class GreatBuildPrepTask extends Task {
     /** How many it's getting this time: a stack, or less after a stack couldn't be had. */
     private int batch;
     private static final int MIN_BATCH = 8;
+    /** The batch size each bot has come down to for an item (a stack too much: half; kept over the task's restarts, or it began at 64 again each time and never got to hand the order on - Zola, a day on cyan wool). */
+    private static final Map<java.util.UUID, Map<net.minecraft.world.item.Item, Integer>> BATCHES = new java.util.concurrent.ConcurrentHashMap<>();
 
     public GreatBuildPrepTask(BotPlayer bot) {
         super(bot);
@@ -125,6 +127,9 @@ public class GreatBuildPrepTask extends Task {
             }
             int stackSize = item.getDefaultMaxStackSize();
             int inBag = Inv.count(bot, stack -> stack.is(item));
+            if (batch <= 0) {
+                batch = BATCHES.getOrDefault(bot.getUUID(), Map.of()).getOrDefault(item, 0);
+            }
             batch = Math.min(missing, batch > 0 ? batch : stackSize);
             bot.debug("great build: getting {} {} ready ({} still to go)", batch, GreatBuild.key(item), missing);
             bot.setMiningRule(mine());
@@ -154,11 +159,16 @@ public class GreatBuildPrepTask extends Task {
         if (status == Status.FAILURE && batch > MIN_BATCH) {
             // A whole stack is too much (dye enough for 25 of 64, say): a smaller batch, what there's enough for
             batch /= 2;
+            BATCHES.computeIfAbsent(bot.getUUID(), u -> new HashMap<>()).put(item, batch);
             bot.debug("great build: can't get that much {}; trying {}", GreatBuild.key(item), batch);
             return Status.RUNNING;
         }
         if (status == Status.FAILURE) {
             bot.debug("great build: can't get {} for now", GreatBuild.key(item));
+            Map<net.minecraft.world.item.Item, Integer> kept = BATCHES.get(bot.getUUID());
+            if (kept != null) {
+                kept.remove(item);
+            }
             FAILED.computeIfAbsent(bot.getUUID(), u -> new HashMap<>()).put(item, bot.level().getGameTime() + RETRY_TICKS);
             // (its order of it goes to another bot, one with flowers or sheep about, say)
             GreatBuild build = GreatBuild.get(bot.level().getServer());
