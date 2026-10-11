@@ -595,6 +595,50 @@ public final class GreatBuild extends SavedData {
         return 100.0 * done / relevantTotal[category];
     }
 
+    /**
+     * Why a bot carrying material isn't putting it in: for each plan block it has on it, the lowest layer that still wants
+     * it, against the layers the building is on now (the lowest unfinished one and {@link #UP_LAYERS} above).
+     */
+    public String explain(BotPlayer bot) {
+        Schematic schematic = plan;
+        if (schematic == null) {
+            return "no plan";
+        }
+        int size = schematic.width() * schematic.length();
+        int lowest = computeLowestPendingLayer();
+        Map<Item, int[]> wanted = new java.util.HashMap<>(); // item -> {lowest layer, cells pending}
+        for (int index = pending.nextSetBit(0); index >= 0; index = pending.nextSetBit(index + 1)) {
+            LegacyBlocks.Spec spec = schematic.at(index);
+            if (spec.kind() != LegacyBlocks.Kind.EXACT) {
+                continue;
+            }
+            int[] entry = wanted.computeIfAbsent(itemFor(spec), i -> new int[] {Integer.MAX_VALUE, 0});
+            entry[0] = Math.min(entry[0], index / size);
+            entry[1]++;
+        }
+        StringBuilder text = new StringBuilder(bot.getPlainTextName() + ": building layers " + lowest + ".." + (lowest + UP_LAYERS)
+            + " (the lowest unfinished one is " + lowest + ", height " + (origin.getY() + lowest) + ")");
+        boolean any = false;
+        for (Map.Entry<Item, int[]> entry : new java.util.TreeMap<Item, int[]>(java.util.Comparator.comparing(GreatBuild::key)) {{
+            putAll(wanted);
+        }}.entrySet()) {
+            Item item = entry.getKey();
+            int carried = com.minebot.bot.action.Inv.count(bot, stack -> stack.is(item));
+            if (carried < 8) {
+                continue;
+            }
+            any = true;
+            int layer = entry.getValue()[0];
+            text.append("\n ").append(key(item).replace("minecraft:", "")).append(" x").append(carried).append(": wanted from layer ")
+                .append(layer).append(" up (").append(entry.getValue()[1]).append(" cells) - ")
+                .append(layer <= lowest + UP_LAYERS ? "can be put in now" : "too high for now (" + (layer - lowest - UP_LAYERS) + " layers above the window)");
+        }
+        if (!any) {
+            text.append("\n (carries no 8+ of anything the plan still wants)");
+        }
+        return text.toString();
+    }
+
     /** For the status: which layers are written off (below which height), and when that may start. */
     public String writeOffText() {
         if (floorLayer > 0) {

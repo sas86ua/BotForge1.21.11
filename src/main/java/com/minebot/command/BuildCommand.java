@@ -48,6 +48,25 @@ final class BuildCommand {
             .then(Commands.literal("orders").executes(BuildCommand::orders))
             .then(Commands.literal("materials").executes(BuildCommand::materials))
             .then(Commands.literal("prep").executes(BuildCommand::prep))
+            .then(Commands.literal("why")
+                .then(Commands.argument("bot", StringArgumentType.word())
+                    .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
+                        BotManager.all().stream().map(BotPlayer::getPlainTextName), builder))
+                    .executes(ctx -> {
+                        GreatBuild build = existing(ctx);
+                        if (build == null) {
+                            return 0;
+                        }
+                        String name = StringArgumentType.getString(ctx, "bot");
+                        for (BotPlayer bot : BotManager.all()) {
+                            if (bot.getPlainTextName().equalsIgnoreCase(name)) {
+                                reply(ctx, build.explain(bot));
+                                return 1;
+                            }
+                        }
+                        ctx.getSource().sendFailure(Component.literal("No bot " + name));
+                        return 0;
+                    })))
             .then(Commands.literal("go")
                 .executes(ctx -> sendEarly(ctx, null))
                 .then(Commands.argument("bot", StringArgumentType.word())
