@@ -238,7 +238,7 @@ public class EscapeTask extends Task {
             BlockPos ahead = feet.relative(away);
             for (BlockPos pos : new BlockPos[] {ahead.above(), ahead}) {
                 if (!isOpen(level, pos)) {
-                    if (!canBreak(level, pos) && !(level.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.AbstractFurnaceBlock)) {
+                    if (!mustBreak(level, pos) && !(level.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.AbstractFurnaceBlock)) {
                         away = away.getClockWise(); // (something it mustn't break: another way)
                         return ++failures > 12 ? Status.FAILURE : Status.RUNNING;
                     }
@@ -259,7 +259,7 @@ public class EscapeTask extends Task {
         BlockPos base = pillarBase;
         BlockPos overHead = base.above(2);
         if (!isOpen(level, overHead)) {
-            if (!canBreak(level, overHead)) {
+            if (!mustBreak(level, overHead)) {
                 away = away == null ? Direction.NORTH : away.getClockWise();
                 return ++failures > 12 ? Status.FAILURE : Status.RUNNING;
             }
@@ -382,6 +382,13 @@ public class EscapeTask extends Task {
     }
 
     /** Rock it may break to get out (not bedrock, nothing built, nothing protected). */
+    /** Shut in for good: a wall someone built (stone bricks of the Great Build, say) goes too - they build it again after. */
+    private static boolean mustBreak(ServerLevel level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        return canBreak(level, pos) || !state.isAir() && state.getFluidState().isEmpty() && !state.hasBlockEntity()
+            && state.getDestroySpeed(level, pos) >= 0 && !ProtectedAreas.isProtected(level, pos);
+    }
+
     private static boolean canBreak(ServerLevel level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
         return !state.isAir() && state.getFluidState().isEmpty() && !state.hasBlockEntity()
