@@ -87,7 +87,25 @@ public class ChestTask extends Task {
         }
         candidates.addAll(Stations.all(bot, state -> state.getBlock() instanceof ChestBlock || state.getBlock() instanceof BarrelBlock,
             NEARBY_RADIUS, (pos, state) -> true, 24));
+        if (com.minebot.bot.build.GreatBuild.nearSite(bot.blockPosition())) {
+            // At the Great Build: every chest on the site is there to take from, however far along it is
+            candidates.addAll(siteChests(bot));
+        }
         return candidates;
+    }
+
+    private static long siteChestsAt = Long.MIN_VALUE;
+    private static List<BlockPos> siteChests = List.of();
+
+    /** (Worked out once in two seconds for all: the planner asks for it again and again.) */
+    private static List<BlockPos> siteChests(BotPlayer bot) {
+        long now = bot.level().getGameTime();
+        if (now - siteChestsAt >= 40 || now < siteChestsAt) {
+            siteChestsAt = now;
+            var build = com.minebot.bot.build.GreatBuild.get(bot.level().getServer());
+            siteChests = build.exists() ? build.siteChests(bot.level()) : List.of();
+        }
+        return siteChests;
     }
 
     /** Home chests and nearby chests/barrels holding something that matches, nearest first. */

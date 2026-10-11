@@ -313,6 +313,21 @@ public class GreatBuildTask extends Task {
 
     /** About this share of the bots at the site (half) clear it first (digging out what the plan has empty), the rest build. */
     private static final double DIGGERS = 0.5;
+    /** With the site dug out nearly (97%), only a quarter of them dig: the rest of what's left is finishing touches. */
+    private static final double DIGGERS_LATE = 0.25;
+    private static final double SITE_NEARLY_DUG = 97.0;
+    private static long shareAt = Long.MIN_VALUE;
+    private static double share = DIGGERS;
+
+    private static double diggerShare(BotPlayer bot) {
+        long now = bot.level().getGameTime();
+        if (now - shareAt >= 100 || now < shareAt) {
+            shareAt = now;
+            GreatBuild build = build(bot);
+            share = build != null && build.progress(1) >= SITE_NEARLY_DUG ? DIGGERS_LATE : DIGGERS;
+        }
+        return share;
+    }
 
     /** One of the site's diggers: the first half of the bots working there (by id, so the same ones; at least one). */
     private static boolean isDigger(BotPlayer bot) {
@@ -323,7 +338,7 @@ public class GreatBuildTask extends Task {
             }
         });
         working.sort(null);
-        int count = Math.max(1, (int) Math.round(working.size() * DIGGERS));
+        int count = Math.max(1, (int) Math.round(working.size() * diggerShare(bot)));
         int rank = working.indexOf(bot.getUUID());
         return rank >= 0 && rank < count;
     }
@@ -765,7 +780,8 @@ public class GreatBuildTask extends Task {
         build.restocking(bot, true);
         bot.setMiningRule(MiningRule.underSite(bot.level(), build));
         bot.setLeaveWhileSmelting(true); // (its camp furnaces cook while it works)
-        child = new ObtainTask(bot, Target.of(item, have + amount), 0).notFromChests();
+        // (out of the chests on the site first - everything it needs to make it and to build with, its parts too - and only then dug and made)
+        child = new ObtainTask(bot, Target.of(item, have + amount), 0);
         return true;
     }
 
