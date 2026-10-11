@@ -103,7 +103,11 @@ public class ChestTask extends Task {
         if (now - siteChestsAt >= 40 || now < siteChestsAt) {
             siteChestsAt = now;
             var build = com.minebot.bot.build.GreatBuild.get(bot.level().getServer());
-            siteChests = build.exists() ? build.siteChests(bot.level()) : List.of();
+            // (the ones on the site, not down the mines under it: four bots swam over a chest at -26 under the sea for
+            // their gear, never getting to it)
+            int ground = build.exists() ? build.centre().getY() : 0;
+            siteChests = build.exists() ? build.siteChests(bot.level()).stream()
+                .filter(pos -> pos.getY() >= ground - 12 && pos.getY() <= ground + 80).toList() : List.of();
         }
         return siteChests;
     }
