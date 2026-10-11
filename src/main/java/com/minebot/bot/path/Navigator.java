@@ -510,6 +510,27 @@ public class Navigator {
                 if (clear(List.of(from.above(2)))) {
                     return;
                 }
+                // Another bot standing in the same cell (two climbing out of the same pit): a block can't go up where one
+                // stands, so neither got up (Obsidian and Glowstone, a night long). The one with the higher id steps aside
+                for (net.minecraft.world.entity.player.Player other : bot.level().getEntitiesOfClass(net.minecraft.world.entity.player.Player.class,
+                        new net.minecraft.world.phys.AABB(from).inflate(0.3, 1.0, 0.3), p -> p != bot)) {
+                    if (bot.getUUID().compareTo(other.getUUID()) > 0) {
+                        double dx = bot.getX() - other.getX();
+                        double dz = bot.getZ() - other.getZ();
+                        double length = Math.sqrt(dx * dx + dz * dz);
+                        if (length < 0.05) {
+                            dx = (bot.getUUID().hashCode() & 1) == 0 ? 1 : -1;
+                            dz = (bot.getUUID().hashCode() & 2) == 0 ? 1 : -1;
+                            length = Math.sqrt(2);
+                        }
+                        bot.setJumping(false);
+                        move(new Vec3(bot.getX() + dx / length * 2.0, bot.getY(), bot.getZ() + dz / length * 2.0), false);
+                    }
+                    // (the other one - the lower id - goes on up alone)
+                    if (bot.getUUID().compareTo(other.getUUID()) > 0) {
+                        return;
+                    }
+                }
                 bot.controller().hold(Vec3.atBottomCenterOf(from));
                 bot.setXRot(90.0F);
                 bot.setJumping(true);
