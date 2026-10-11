@@ -209,8 +209,8 @@ public final class Home {
         // is taken up again - it carries them in, as it does moving out of the hut (twice at most, no round and round)
         BlockPos outBed = memory.bed();
         BlockPos outTable = memory.craftingTable();
-        boolean bedOut = outBed != null && !plan.inFootprint(outBed);
-        boolean tableOut = outTable != null && !plan.inFootprint(outTable) && !memory.borrowed().contains(outTable);
+        boolean bedOut = outBed != null && level.isLoaded(outBed) && (!plan.inFootprint(outBed) || level.canSeeSky(outBed.above()));
+        boolean tableOut = outTable != null && level.isLoaded(outTable) && (!plan.inFootprint(outTable) || level.canSeeSky(outTable.above())) && !memory.borrowed().contains(outTable);
         if ((bedOut || tableOut) && RELOCATED.getOrDefault(bot.getUUID(), 0) < 2
             && plan.cells().stream().anyMatch(cell -> cell.kind() == 'B' || cell.kind() == 'T')) {
             RELOCATED.merge(bot.getUUID(), 1, Integer::sum);
