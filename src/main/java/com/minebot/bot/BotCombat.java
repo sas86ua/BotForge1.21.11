@@ -169,7 +169,38 @@ public class BotCombat {
             return false;
         }
         fight(target);
+        noteHarm(target);
         return true;
+    }
+
+    /** Its health when last hit, and how long it's been in reach without losing any. */
+    private float targetHealth;
+    private int unharmedTicks;
+    private static final int UNHARMED_TICKS = 20 * 10;
+
+    /**
+     * One that won't be harmed (a zombie stuck half in the air, out of step with the world: eleven bots stood round it
+     * hitting it for minutes, off their work): left alone for a while.
+     */
+    private void noteHarm(LivingEntity enemy) {
+        if (enemy != target) {
+            return;
+        }
+        if (enemy.getHealth() < targetHealth - 0.01F) {
+            targetHealth = enemy.getHealth();
+            unharmedTicks = 0;
+            return;
+        }
+        targetHealth = Math.min(targetHealth, enemy.getHealth());
+        if (bot.distanceTo(enemy) < 4.0 && ++unharmedTicks > UNHARMED_TICKS) {
+            bot.debug("{} takes no harm; leaving it", enemy.getName().getString());
+            ignoredUntil.put(enemy.getUUID(), now() + 20L * 60 * 5); // (five minutes: no use coming back to it soon)
+            if (enemy == aggressor) {
+                aggressor = null;
+            }
+            setTarget(null);
+            bot.controller().releaseInputs();
+        }
     }
 
     private @Nullable LivingEntity pickTarget() {
@@ -228,6 +259,8 @@ public class BotCombat {
             }
             bestDistance = Double.MAX_VALUE;
             ticksWithoutProgress = 0;
+            targetHealth = newTarget != null ? newTarget.getHealth() : 0;
+            unharmedTicks = 0;
             strikeAt = -1;
             blockThisRound = true;
         }
