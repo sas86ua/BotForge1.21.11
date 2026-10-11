@@ -888,7 +888,7 @@ public final class GreatBuild extends SavedData {
     private boolean coversPending(int index) {
         Schematic schematic = plan;
         int layer = schematic.width() * schematic.length();
-        for (int below = index - layer; below >= 0; below -= layer) {
+        for (int below = index - layer; below >= floorLayer * layer; below -= layer) { // (written-off layers below no longer count)
             LegacyBlocks.Kind kind = schematic.at(below).kind();
             if (kind == LegacyBlocks.Kind.AIR || kind == LegacyBlocks.Kind.SKIP) {
                 continue; // (open space between: what's under it counts)
