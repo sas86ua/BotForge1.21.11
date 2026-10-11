@@ -514,7 +514,7 @@ public class Navigator {
                 // stands, so neither got up (Obsidian and Glowstone, a night long). The one with the higher id steps aside
                 for (net.minecraft.world.entity.player.Player other : bot.level().getEntitiesOfClass(net.minecraft.world.entity.player.Player.class,
                         new net.minecraft.world.phys.AABB(from).inflate(0.3, 1.0, 0.3), p -> p != bot)) {
-                    boolean otherIdle = other instanceof BotPlayer ob && !ob.navigator().isActive();
+                    boolean otherIdle = other instanceof BotPlayer ob && (!ob.navigator().isActive() || Inv.count(ob, Inv::isScaffold) == 0);
                     if (otherIdle) {
                         // (one that's standing there with no way up of its own - no blocks - is pushed aside: it won't move for us)
                         double dx = other.getX() - bot.getX();
