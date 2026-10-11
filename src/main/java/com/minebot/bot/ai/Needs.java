@@ -227,10 +227,10 @@ public final class Needs {
         // In between its other work: its share of the Great Build's materials, mined underground
         new Need("great build prep", GreatBuildPrepTask::wanted, GreatBuildPrepTask::new),
         new Need("fill holes", FillHoleTask::wanted, FillHoleTask::new),
-        // A few ladders to carry: up the walls of its buildings (they stay), not a pillar beside them
-        obtain("ladders", bot -> Home.has(bot) && Inv.count(bot, stack -> stack.is(Items.LADDER)) < 3
+        // Eight ladders to carry: up the walls of its buildings (they stay), not a pillar beside them
+        obtain("ladders", bot -> Home.has(bot) && Inv.count(bot, stack -> stack.is(Items.LADDER)) < 8
                 && bot.every("ladders", STOCK_CHECK, () -> true),
-            bot -> Target.of(Items.LADDER, 3)),
+            bot -> Target.of(Items.LADDER, 8)),
         // Last of all: output left in its own furnace (a smelting job cut short) is taken out
         new Need("furnace output", FurnaceOutputTask::wanted, FurnaceOutputTask::new),
         // Iron at home: 3-6 blocks of iron and 12-36 ingots (ingots into blocks, or blocks back into ingots)
