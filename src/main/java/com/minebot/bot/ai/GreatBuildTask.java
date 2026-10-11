@@ -91,6 +91,7 @@ public class GreatBuildTask extends Task {
     private long retryAt;
     private @Nullable GreatBuild.Job job;
     private int jobTicks;
+    private int jobLimit = JOB_TICKS;
     private int placeFails;
     private int idleTicks;
 
@@ -798,7 +799,12 @@ public class GreatBuildTask extends Task {
         if (bot.onGround()) {
             airTicks = 0;
         }
-        if (++jobTicks > JOB_TICKS) {
+        if (++jobTicks == 1) {
+            // (the way there is time too: 30 seconds of work, and a few seconds more for each block of the walk - a far job was
+            // left at once, half way there, and the bot walked on to the next one)
+            jobLimit = JOB_TICKS + (int) Math.min(20 * 150, Math.sqrt(bot.distanceToSqr(Vec3.atCenterOf(pos))) * 8);
+        }
+        if (jobTicks > jobLimit) {
             bot.debug("great build: leaving {} at {} for later", current.type(), pos.toShortString());
             giveUp(build);
             return Status.RUNNING;
