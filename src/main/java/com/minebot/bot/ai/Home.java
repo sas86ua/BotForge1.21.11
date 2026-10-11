@@ -105,8 +105,10 @@ public final class Home {
         return null;
     }
 
+    private static final java.util.Map<java.util.UUID, Integer> RELOCATED = new java.util.concurrent.ConcurrentHashMap<>();
+
     /** How far round the house (and the old hut) the steps, pillars and ladders put up to build it are taken down. */
-    private static final int TIDY_RANGE = 6;
+    private static final int TIDY_RANGE = 8;
     private static final int TIDY_HEIGHT = 40;
 
     /**
@@ -203,6 +205,19 @@ public final class Home {
             return;
         }
         noteStrays(bot, level, plan);
+        // Bed or crafting table standing outside the finished house (put down by the wall instead of in its place): the house
+        // is taken up again - it carries them in, as it does moving out of the hut (twice at most, no round and round)
+        BlockPos outBed = memory.bed();
+        BlockPos outTable = memory.craftingTable();
+        boolean bedOut = outBed != null && !plan.inFootprint(outBed);
+        boolean tableOut = outTable != null && !plan.inFootprint(outTable) && !memory.borrowed().contains(outTable);
+        if ((bedOut || tableOut) && RELOCATED.getOrDefault(bot.getUUID(), 0) < 2
+            && plan.cells().stream().anyMatch(cell -> cell.kind() == 'B' || cell.kind() == 'T')) {
+            RELOCATED.merge(bot.getUUID(), 1, Integer::sum);
+            bot.debug("my {} stands outside the house; moving {} in", bedOut ? "bed" : "crafting table", bedOut && tableOut ? "them" : "it");
+            memory.setHouseDone(false);
+            return;
+        }
         // The furnace it remembers stands outside the finished house (put up at the hut, or by the wall): the one inside, if
         // there's one, is its furnace; else it forgets that one and puts a new one in the house
         BlockPos furnace = memory.furnace();
