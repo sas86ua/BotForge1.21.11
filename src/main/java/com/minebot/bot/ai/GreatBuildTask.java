@@ -870,7 +870,8 @@ public class GreatBuildTask extends Task {
                 if (dig && near) {
                     sightWalked = true; // (nowhere to see it from: what's in the way, if it may go, is dug first)
                 } else {
-                    giveUp(build);
+                    // (no way found from close by: unreachable; from far off it may be only the search giving out)
+                    giveUp(build, bot.distanceToSqr(Vec3.atCenterOf(pos)) < 24 * 24);
                 }
             } else if (status == Navigator.Status.SUCCESS && dig) {
                 sightWalked = true;
@@ -883,7 +884,7 @@ public class GreatBuildTask extends Task {
             BlockPos target = inSight(build, pos);
             if (target == null) {
                 bot.debug("great build: {} is behind something to keep; from another side later", pos.toShortString());
-                giveUp(build);
+                giveUp(build, true);
                 return Status.RUNNING;
             }
             breaker.start(target);
@@ -965,10 +966,15 @@ public class GreatBuildTask extends Task {
     }
 
     private void giveUp(GreatBuild build) {
+        giveUp(build, false);
+    }
+
+    /** @param unreachable no way there, or shut behind what mustn't go (counts towards writing its layer off; a timeout doesn't) */
+    private void giveUp(GreatBuild build, boolean unreachable) {
         breaker.cancel();
         bot.navigator().stop();
         if (job != null) {
-            build.giveUp(bot, job);
+            build.giveUp(bot, job, unreachable);
         }
         job = null;
     }

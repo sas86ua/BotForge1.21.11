@@ -73,7 +73,20 @@ final class BuildCommand {
                     .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
                         BotManager.all().stream().map(BotPlayer::getPlainTextName), builder))
                     .executes(ctx -> sendEarly(ctx, StringArgumentType.getString(ctx, "bot")))))
-            .then(Commands.literal("writeoff").executes(ctx -> {
+            .then(Commands.literal("writeoff")
+                .then(Commands.literal("reset")
+                    .then(Commands.argument("layer", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0))
+                        .executes(ctx -> {
+                            GreatBuild build = existing(ctx);
+                            if (build == null) {
+                                return 0;
+                            }
+                            int layer = com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "layer");
+                            build.setFloorLayer(layer);
+                            reply(ctx, "Great Build: building from layer " + layer + " again; " + build.writeOffText());
+                            return 1;
+                        })))
+                .executes(ctx -> {
                 GreatBuild build = existing(ctx);
                 if (build == null) {
                     return 0;

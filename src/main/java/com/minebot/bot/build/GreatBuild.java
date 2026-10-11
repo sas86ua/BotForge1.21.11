@@ -935,15 +935,21 @@ public final class GreatBuild extends SavedData {
     }
 
     /** Couldn't be done for now: left alone a while. */
-    public void giveUp(BotPlayer bot, Job job) {
+    /** @param unreachable no way to the cell (or it's shut behind what mustn't go): only that counts towards writing its layer off */
+    public void giveUp(BotPlayer bot, Job job, boolean unreachable) {
         long now = bot.level().getGameTime();
         cooldowns.put(job.index(), now + COOLDOWN_TICKS);
         claims.remove(job.index());
-        noteGiveUp(bot, job, now);
+        if (unreachable) {
+            noteGiveUp(bot, job, now);
+        }
     }
 
     private final Map<Integer, Map<UUID, Long>> layerGiveUps = new java.util.HashMap<>();
     private static final int GIVE_UP_BOTS = 3;
+    /** Not one layer after another in a rush: ten minutes at least between two (eight went in eleven minutes, two in fifteen seconds). */
+    private static final long WRITE_OFF_GAP = 20L * 60 * 10;
+    private long lastWriteOff;
     private static final long GIVE_UP_WINDOW = 20L * 60 * 5;
     /** The share of the site dug out (percent) that counts as done. */
     private static final double SITE_DUG = 99.0;
@@ -958,6 +964,14 @@ public final class GreatBuild extends SavedData {
     }
 
     /** An admin's: the site counts as dug out long ago - layers may be written off from now on. */
+    /** An admin's: the building starts again from this layer (the ones below it stay written off; 0: none). */
+    public void setFloorLayer(int layer) {
+        floorLayer = Math.max(0, layer);
+        layerGiveUps.clear();
+        lowestLayerAt = Long.MIN_VALUE / 4;
+        setDirty();
+    }
+
     public void allowWriteOffNow() {
         siteDugSession = 0;
         setDirty();
@@ -984,7 +998,8 @@ public final class GreatBuild extends SavedData {
         Map<UUID, Long> bots = layerGiveUps.computeIfAbsent(layer, l -> new java.util.HashMap<>());
         bots.put(bot.getUUID(), now);
         bots.values().removeIf(at -> now - at > GIVE_UP_WINDOW);
-        if (bots.size() >= GIVE_UP_BOTS) {
+        if (bots.size() >= GIVE_UP_BOTS && (lastWriteOff == 0 || now - lastWriteOff >= WRITE_OFF_GAP)) {
+            lastWriteOff = now;
             floorLayer = layer + 1;
             layerGiveUps.clear();
             lowestLayerAt = Long.MIN_VALUE / 4;
