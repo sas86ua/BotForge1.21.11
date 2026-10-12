@@ -182,8 +182,8 @@ public class BotCombat {
      * One that won't be harmed (a zombie stuck half in the air, out of step with the world: eleven bots stood round it
      * hitting it for minutes, off their work): left alone for a while.
      */
-    private void noteHarm(LivingEntity enemy) {
-        if (enemy != target) {
+    private void noteHarm(@Nullable LivingEntity enemy) {
+        if (enemy == null || enemy != target) { // (the fight itself may have given the target up)
             return;
         }
         if (enemy.getHealth() < targetHealth - 0.01F) {
