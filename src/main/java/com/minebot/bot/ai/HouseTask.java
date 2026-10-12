@@ -160,7 +160,8 @@ public class HouseTask extends Task {
      */
     private static boolean rebuildDue(BotPlayer bot) {
         BotMemory memory = bot.memory();
-        if (memory.houseOrigin() == null || HousePlans.isSchematic(memory.houseTemplate()) || HousePlans.designs() == 0) {
+        // (no plan at all - "done" with just the hut: Obsidian, Deepslate and Bedrock never got a house of their own - is due too)
+        if (memory.houseOrigin() != null && HousePlans.isSchematic(memory.houseTemplate()) || HousePlans.designs() == 0) {
             return false;
         }
         long now = bot.level().getGameTime();
