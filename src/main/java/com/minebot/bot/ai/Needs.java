@@ -62,6 +62,8 @@ public final class Needs {
                 Inv.count(bot, stack -> stack.is(ItemTags.LOGS)) + bot.trunk().size()))),
         // Take down the pillar it climbed to reach an enemy or a treetop
         new Need("dismantle", DismantleTask::wanted, DismantleTask::new),
+        // A finished building of the village: out to it, its scaffolding and strays taken down (once a day, each bot)
+        new Need("village tidy", VillageTidyTask::wanted, VillageTidyTask::new),
         // Something useful lying on the ground nearby
         new Need("loot", LootTask::wanted, LootTask::new),
         // Ready gear in a chest at home, better than its own (or missing: just died and started over):
