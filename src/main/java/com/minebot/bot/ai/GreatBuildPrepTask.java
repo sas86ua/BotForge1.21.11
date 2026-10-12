@@ -49,6 +49,19 @@ public class GreatBuildPrepTask extends Task {
         this.item = shortfall(bot);
     }
 
+    /** Days before a session from which the order comes before the bot's other work. */
+    private static final int DUE_DAYS = 5;
+
+    /** Is the next session only a few days off? */
+    public static boolean dueSoon(BotPlayer bot) {
+        GreatBuild build = GreatBuild.get(bot.level().getServer());
+        if (!build.exists()) {
+            return false;
+        }
+        long day = bot.level().getDayTime() / GreatBuild.DAY;
+        return build.nextDay() - day <= DUE_DAYS;
+    }
+
     public static boolean wanted(BotPlayer bot) {
         return bot.memory().autonomous() && Home.isNear(bot, 48) && !GreatBuildTask.isAway(bot) && !GreatBuildTask.sessionOn(bot)
             && bot.every("great build prep", CHECK_TICKS, () -> shortfall(bot) != null);

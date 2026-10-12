@@ -93,6 +93,9 @@ public final class Needs {
         // Every few days: off on a journey for food or ore (no sleeping meanwhile)
         // Every 15 days, two days at the Great Build with everyone else (see GreatBuild)
         new Need("great build", GreatBuildTask::wanted, GreatBuildTask::new),
+        // The Great Build's order, the last few days before the session: ahead of its own house, the village's buildings,
+        // the pens and fields (at the bottom of the list, it was never got to - Sunny, none of his 576 polished deepslate)
+        new Need("great build prep (due)", bot -> GreatBuildPrepTask.dueSoon(bot) && GreatBuildPrepTask.wanted(bot), GreatBuildPrepTask::new),
         new Need("journey", JourneyTask::wanted, JourneyTask::new),
         new Need("sleep", SleepTask::wanted, SleepTask::new),
         new Need("home", bot -> !Home.has(bot) && !HouseTask.movingIn(bot), HomeTask::new), // (not while carrying its bed to its house)
