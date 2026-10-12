@@ -243,6 +243,16 @@ public class FurnishTask extends Task {
         // (a chest's second tier, on top of one of its chests, is no floor spot: still free if the air is)
         boolean stillFree = spot != null && (PlaceSpots.isFreeGroundSpot(level, spot)
             || item == Items.CHEST && level.getBlockState(spot).isAir() && level.getBlockState(spot.below()).is(Blocks.CHEST));
+        if (!stillFree && bot.memory().houseOrigin() != null) {
+            // A house of a design with a layout (furnished once by an admin, as an example): its places first
+            var laid = com.minebot.bot.build.HouseLayouts.freeSpot(level.getServer(), level,
+                com.minebot.bot.build.HousePlans.of(bot.memory()), item);
+            if (laid != null) {
+                spot = laid.pos();
+                spotFacing = laid.facing();
+                stillFree = true;
+            }
+        }
         if (!stillFree) {
             BlockPos workshop = bot.memory().workshop();
             // (the crafting table and the anvil go in the house, by the bed; the rest to the workshop)

@@ -249,6 +249,26 @@ public final class BotCommand {
                     }))))
             .then(Commands.literal("house")
                 .then(Commands.literal("designs").executes(BotCommand::houseDesigns))
+                .then(Commands.literal("layout").then(Commands.argument("design", StringArgumentType.word())
+                    .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(com.minebot.bot.build.HouseSchematics.all().stream()
+                        .map(d -> d.name().replace(' ', '_')), builder))
+                    .then(Commands.argument("origin", BlockPosArgument.blockPos()).executes(ctx -> {
+                        // (the furniture of this house, its corner at origin, saved as the way every house of its design is furnished)
+                        String name = StringArgumentType.getString(ctx, "design").replace('_', ' ');
+                        var design = com.minebot.bot.build.HouseSchematics.all().stream().filter(d -> d.name().equals(name)).findFirst().orElse(null);
+                        if (design == null) {
+                            ctx.getSource().sendFailure(Component.literal("No design " + name));
+                            return 0;
+                        }
+                        try {
+                            reply(ctx, com.minebot.bot.build.HouseLayouts.save(ctx.getSource().getServer(), ctx.getSource().getLevel(), design,
+                                BlockPosArgument.getBlockPos(ctx, "origin")));
+                            return 1;
+                        } catch (java.io.IOException e) {
+                            ctx.getSource().sendFailure(Component.literal("Can't save: " + e.getMessage()));
+                            return 0;
+                        }
+                    }))))
                 .then(Commands.literal("rebuild").then(Commands.argument("bot", StringArgumentType.word())
                     .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(BotManager.all().stream().map(BotPlayer::getPlainTextName), builder))
                     .executes(ctx -> {

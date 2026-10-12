@@ -232,6 +232,29 @@ public final class SchematicHouse implements HousePlan {
         };
     }
 
+    /** Local (x, layer, z) of the design to world, for this house. */
+    public BlockPos localToWorld(int x, int y, int z) {
+        return toWorld(x, y, z);
+    }
+
+    /** A direction in the design's own frame, as it lies in this house. */
+    public Direction turn(Direction local) {
+        Direction world = local;
+        for (int i = 0; i < steps; i++) {
+            world = world.getClockWise();
+        }
+        return world;
+    }
+
+    /** A direction in the world, in the design's own frame. */
+    public Direction unturn(Direction world) {
+        Direction local = world;
+        for (int i = 0; i < steps; i++) {
+            local = local.getCounterClockWise();
+        }
+        return local;
+    }
+
     public HouseSchematics.Design design() {
         return design;
     }
