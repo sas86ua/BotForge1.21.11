@@ -102,6 +102,8 @@ public final class Needs {
         // each of them, a minute of building at a time)
         new Need("house", HouseTask::wanted, HouseTask::new),
         new Need("furnish", Home::needsFurniture, FurnishTask::new),
+        // A house of a design with a layout: its chests, furnaces and table moved to the layout's places, one at a time
+        new Need("rearrange", RearrangeTask::wanted, RearrangeTask::new),
         new Need("clear trees", ClearTreesTask::wanted, ClearTreesTask::new),
         new Need("store", ChestTask::bagFull, StoreTask::new),
         // At home: old tools and armour it took off go in the chest (not carried around)

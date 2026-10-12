@@ -249,6 +249,45 @@ public final class BotCommand {
                     }))))
             .then(Commands.literal("house")
                 .then(Commands.literal("designs").executes(BotCommand::houseDesigns))
+                .then(Commands.literal("rearrange")
+                    .then(Commands.literal("on").executes(ctx -> {
+                        com.minebot.bot.ai.RearrangeTask.enabled = true;
+                        reply(ctx, "Bots rearrange their houses to the layouts now");
+                        return 1;
+                    }))
+                    .then(Commands.literal("off").executes(ctx -> {
+                        com.minebot.bot.ai.RearrangeTask.enabled = false;
+                        reply(ctx, "Rearranging stopped");
+                        return 1;
+                    }))
+                    .then(Commands.literal("check").then(Commands.argument("bot", StringArgumentType.word())
+                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(BotManager.all().stream().map(BotPlayer::getPlainTextName), builder))
+                        .executes(ctx -> {
+                            // (where the layout puts each piece in this bot's house, and what stands there now)
+                            String name = StringArgumentType.getString(ctx, "bot");
+                            for (BotPlayer bot : BotManager.all()) {
+                                if (!bot.getPlainTextName().equalsIgnoreCase(name)) {
+                                    continue;
+                                }
+                                var plan = com.minebot.bot.build.HousePlans.of(bot.memory());
+                                if (!(plan instanceof com.minebot.bot.build.SchematicHouse house)
+                                    || !com.minebot.bot.build.HouseLayouts.has(ctx.getSource().getServer(), plan)) {
+                                    ctx.getSource().sendFailure(Component.literal(name + ": no layout for its house"));
+                                    return 0;
+                                }
+                                StringBuilder text = new StringBuilder(name + ": " + house.name() + " facing " + house.front());
+                                for (var spot : com.minebot.bot.build.HouseLayouts.spots(ctx.getSource().getServer(), house)) {
+                                    var state = bot.level().getBlockState(spot.pos());
+                                    text.append("\n ").append(spot.block().getName().getString()).append(" at ").append(spot.pos().toShortString())
+                                        .append(": now ").append(state.getBlock().getName().getString())
+                                        .append(", floor ").append(bot.level().getBlockState(spot.pos().below()).getBlock().getName().getString());
+                                }
+                                reply(ctx, text.toString());
+                                return 1;
+                            }
+                            ctx.getSource().sendFailure(Component.literal("No bot " + name));
+                            return 0;
+                        }))))
                 .then(Commands.literal("layout").then(Commands.argument("design", StringArgumentType.word())
                     .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(com.minebot.bot.build.HouseSchematics.all().stream()
                         .map(d -> d.name().replace(' ', '_')), builder))
