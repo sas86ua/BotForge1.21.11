@@ -38,7 +38,22 @@ public class EscapeTask extends Task {
     }
 
     /** Underground and in trouble: running out of air, or no way found to wherever it was going. */
+    /** Until when (game time) a bot found trapped stays on the way out: starting it cleared what showed it trapped (Quartz and Obsidian: "escape" started and dropped every six seconds, for an hour). */
+    private static final java.util.Map<java.util.UUID, Long> TRAPPED = new java.util.concurrent.ConcurrentHashMap<>();
+
     public static boolean wanted(BotPlayer bot) {
+        long now = bot.level().getGameTime();
+        if (rawWanted(bot)) {
+            TRAPPED.put(bot.getUUID(), now + 20 * 90);
+            return true;
+        }
+        return TRAPPED.getOrDefault(bot.getUUID(), 0L) > now;
+    }
+
+    private static boolean rawWanted(BotPlayer bot) {
+        if (underground(bot) && bot.areaSeconds() >= 120 && bot.stillSeconds() >= 60 && !bot.navigator().isActive()) {
+            return true; // (down a pit with nothing to do, nothing tried: Copper, an hour at the bottom of one)
+        }
         if (!underground(bot)) {
             // (shut in a room above ground: nowhere to go, its way out walled up - Glowstone, in its own house)
             // (or standing there a minute with nothing to do: shut in by the others' building at the Great Build, it
