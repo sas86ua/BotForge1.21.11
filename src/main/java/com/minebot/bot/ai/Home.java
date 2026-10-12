@@ -117,6 +117,36 @@ public final class Home {
      * the ground is left as it is, and so is anything by a field, water or fence.
      */
     private static void noteStrays(BotPlayer bot, ServerLevel level, com.minebot.bot.build.HousePlan plan) {
+        noteStrays(bot, level, plan, true);
+    }
+
+    /**
+     * The village's buildings, once done: the scaffolding left round them (pillars, ramps, ladders, stumps: eight blocks out
+     * from the walls) and inside them (a block where the plan has none) goes as it does round a house. Those within
+     * reach of the bot, every five minutes.
+     */
+    public static void tidyVillage(BotPlayer bot, ServerLevel level) {
+        for (var project : com.minebot.bot.build.Villages.get(level.getServer()).projects()) {
+            if (!project.done() || !project.origin().closerThan(bot.blockPosition(), 90)) {
+                continue;
+            }
+            var plan = com.minebot.bot.build.Villages.plan(project);
+            noteStrays(bot, level, plan, false);
+            for (var cell : plan.cells()) {
+                if (cell.kind() != '.' || cell.layer() == 0 || !level.isLoaded(cell.pos())) {
+                    continue;
+                }
+                var state = level.getBlockState(cell.pos());
+                if (!state.isAir() && com.minebot.bot.action.Inv.isScaffold(new net.minecraft.world.item.ItemStack(state.getBlock().asItem()))
+                    && !bot.pillars().contains(cell.pos())) {
+                    bot.notePillar(cell.pos().immutable());
+                    CLUTTER.computeIfAbsent(bot.getUUID(), u -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(cell.pos().immutable());
+                }
+            }
+        }
+    }
+
+    private static void noteStrays(BotPlayer bot, ServerLevel level, com.minebot.bot.build.HousePlan plan, boolean withHut) {
         BotMemory memory = bot.memory();
         java.util.Set<BlockPos> planned = new java.util.HashSet<>();
         for (var cell : plan.cells()) {
@@ -129,7 +159,7 @@ public final class Home {
         java.util.List<int[]> areas = new java.util.ArrayList<>(); // (minX, minZ, maxX, maxZ)
         areas.add(new int[] {o.getX() - TIDY_RANGE, o.getZ() - TIDY_RANGE, o.getX() + plan.sizeX() - 1 + TIDY_RANGE,
             o.getZ() + plan.sizeZ() - 1 + TIDY_RANGE});
-        BlockPos hut = memory.workshop();
+        BlockPos hut = withHut ? memory.workshop() : null;
         if (hut != null && !plan.inFootprint(hut)) {
             areas.add(new int[] {hut.getX() - TIDY_RANGE - 3, hut.getZ() - TIDY_RANGE - 3, hut.getX() + TIDY_RANGE + 3, hut.getZ() + TIDY_RANGE + 3});
         }
@@ -405,6 +435,10 @@ public final class Home {
                 return;
             }
         }
+        bot.every("village tidy", CLUTTER_CHECK_TICKS, () -> {
+            tidyVillage(bot, level);
+            return false;
+        });
         if (bed != null && memory.houseDone() && memory.houseOrigin() != null && level.isLoaded(bed)) {
             bot.every("house clutter", CLUTTER_CHECK_TICKS, () -> {
                 noteClutter(bot, level);
