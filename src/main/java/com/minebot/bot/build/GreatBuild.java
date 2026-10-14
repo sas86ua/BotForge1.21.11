@@ -904,12 +904,12 @@ public final class GreatBuild extends SavedData {
     }
 
     /**
-     * The first layer from the bottom with real work left in it (BUSY_CELLS or more): the layers the bots build in reach
+     * The first layer from the bottom with real work left in it (BUSY_CELLS blocks or more): the layers the bots build in reach
      * that far up from it. A few odd blocks nobody has (red beds, pressure plates, note blocks) held the lowest layer, and
      * so the whole build, down at a layer long done: no work for the bots up the walls above. (Those few stay in reach.)
      */
     private int lowestBusyLayer;
-    private static final int BUSY_CELLS = 64;
+    private static final int BUSY_CELLS = 200;
 
     private int computeLowestPendingLayer() {
         Schematic schematic = plan;
@@ -946,7 +946,7 @@ public final class GreatBuild extends SavedData {
                 countLayer = at;
                 count = 0;
             }
-            if (++count >= BUSY_CELLS) {
+            if (kind == LegacyBlocks.Kind.EXACT && ++count >= BUSY_CELLS) { // (blocks to put in: not ground to fill, not the other half of a bed)
                 lowestBusyLayer = at;
                 return lowestFound;
             }
