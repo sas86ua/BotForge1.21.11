@@ -329,6 +329,25 @@ public class GreatBuildTask extends Task {
         return share;
     }
 
+    /** The way into the basement it goes by to its job there (null: straight to the job). */
+    private @Nullable BlockPos via;
+
+    /** How many of the bots at the site work the basement first. */
+    private static final int BASEMENT_CREW = 3;
+
+    /** One of the basement crew: the last few of the bots working at the site (by id; the diggers are the first). */
+    private static boolean isBasementCrew(BotPlayer bot) {
+        List<UUID> working = new ArrayList<>();
+        AWAY.forEach((uuid, stage) -> {
+            if (stage == Stage.WORK) {
+                working.add(uuid);
+            }
+        });
+        working.sort(null);
+        int rank = working.indexOf(bot.getUUID());
+        return rank >= 0 && rank >= working.size() - BASEMENT_CREW && working.size() > BASEMENT_CREW + 2;
+    }
+
     /** One of the site's diggers: the first half of the bots working there (by id, so the same ones; at least one). */
     private static boolean isDigger(BotPlayer bot) {
         List<UUID> working = new ArrayList<>();
@@ -625,7 +644,15 @@ public class GreatBuildTask extends Task {
                 return Status.RUNNING; // (nothing found a moment ago: the whole site isn't gone over every tick by every bot - that hung the server)
             }
             Stash.makeRoom(bot, 3);
-            job = build.nextJob(bot, true, digger);
+            // The basement crew: work down in the basement first, by its ways in (the rest build up top)
+            job = !digger && isBasementCrew(bot) ? build.basementJob(bot, bot.level().getGameTime()) : null;
+            via = null;
+            if (job != null && !build.inBasement(bot.blockPosition()) && bot.distanceToSqr(Vec3.atCenterOf(job.pos())) > 16 * 16) {
+                via = build.entranceNear(job.pos());
+            }
+            if (job == null) {
+                job = build.nextJob(bot, true, digger);
+            }
             if (job == null) {
                 nextJobAt = bot.level().getGameTime() + 20 + bot.getRandom().nextInt(20);
             }
@@ -862,9 +889,14 @@ public class GreatBuildTask extends Task {
         boolean unseen = false; // (no sight needed at the site: through other blocks too, as the diggers asked - it is only reach)
         if (!near || !dig && inside || unseen) {
             Navigator navigator = bot.navigator();
+            if (via != null && bot.position().distanceTo(Vec3.atBottomCenterOf(via)) < 2.5) {
+                via = null; // (in by the way in: on to the job from here)
+                navigator.stop();
+            }
             if (!navigator.isActive() || jobTicks == 1) {
                 // (one walled in all round is never in sight: just close by, it's swapped where it is)
-                navigator.navigate(Goal.reach(pos), JOB_NODES);
+                // (a basement job: first to the way in nearest it, then on - not a search through the whole site each time)
+                navigator.navigate(via != null ? Goal.near(via, 1.5) : Goal.reach(pos), JOB_NODES);
             }
             Navigator.Status status = navigator.tick();
             if (status == Navigator.Status.FAILED) {

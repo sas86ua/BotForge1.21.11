@@ -231,6 +231,8 @@ public final class GreatBuild extends SavedData {
 
     private void setPlan(Schematic schematic) {
         plan = schematic;
+        roofs = null;
+        entrances = null;
         origin = centre.subtract(schematic.pastePoint());
         site = new int[] {origin.getX() - SITE_MARGIN, origin.getZ() - SITE_MARGIN,
             origin.getX() + schematic.width() + SITE_MARGIN, origin.getZ() + schematic.length() + SITE_MARGIN};
@@ -693,6 +695,152 @@ public final class GreatBuild extends SavedData {
         return state.getCollisionShape(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, BlockPos.ZERO).isEmpty()
             || state.is(net.minecraft.tags.BlockTags.DOORS) || state.is(net.minecraft.tags.BlockTags.FENCE_GATES)
             || state.is(net.minecraft.tags.BlockTags.TRAPDOORS) || state.is(Blocks.LADDER);
+    }
+
+    // ---- the basement: under the ground, under the plan's roof ---------------------------------------
+
+    /** Per column (x + z * width): the highest layer of the plan with a block (-1: none); worked out once. */
+    private int @Nullable [] roofs;
+    /** Ways into the basement from the open pit or the ground floor, a few blocks apart; worked out once. */
+    private @Nullable List<BlockPos> entrances;
+
+    private int groundLayer() {
+        return Math.max(0, Math.min(plan.height() - 1, centre.getY() - origin.getY()));
+    }
+
+    private int[] roofs() {
+        if (roofs == null) {
+            Schematic s = plan;
+            int[] r = new int[s.width() * s.length()];
+            for (int z = 0; z < s.length(); z++) {
+                for (int x = 0; x < s.width(); x++) {
+                    r[z * s.width() + x] = -1;
+                    for (int y = s.height() - 1; y >= 0; y--) {
+                        if (!passableInPlan(s.index(x, y, z))) {
+                            r[z * s.width() + x] = y;
+                            break;
+                        }
+                    }
+                }
+            }
+            roofs = r;
+        }
+        return roofs;
+    }
+
+    /** A cell of the plan under the ground with the plan's own roof over it. */
+    private boolean inBasement(int index) {
+        int area = plan.width() * plan.length();
+        return index / area < groundLayer() && index / area < roofs()[index % area];
+    }
+
+    /** Is this spot in the basement? */
+    public boolean inBasement(BlockPos pos) {
+        int x = pos.getX() - origin.getX();
+        int y = pos.getY() - origin.getY();
+        int z = pos.getZ() - origin.getZ();
+        return plan != null && x >= 0 && z >= 0 && y >= 0 && x < plan.width() && z < plan.length() && y < plan.height()
+            && inBasement(plan.index(x, y, z));
+    }
+
+    private List<BlockPos> entrances() {
+        if (entrances == null) {
+            Schematic s = plan;
+            int w = s.width();
+            int l = s.length();
+            List<BlockPos> found = new ArrayList<>();
+            for (int index = 0; index < groundLayer() * w * l; index++) {
+                if (!inBasement(index) || !passableInPlan(index)) {
+                    continue;
+                }
+                int y = index / (w * l);
+                int z = (index / w) % l;
+                int x = index % w;
+                int[][] steps = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}};
+                for (int[] d : steps) {
+                    int nx = x + d[0];
+                    int ny = y + d[1];
+                    int nz = z + d[2];
+                    if (nx < 0 || nz < 0 || nx >= w || nz >= l || ny >= s.height()) {
+                        continue;
+                    }
+                    int next = s.index(nx, ny, nz);
+                    if (passableInPlan(next) && !inBasement(next)) {
+                        BlockPos at = worldPos(index);
+                        if (found.stream().noneMatch(e -> e.closerThan(at, 8))) {
+                            found.add(at);
+                        }
+                        break;
+                    }
+                }
+            }
+            entrances = List.copyOf(found);
+        }
+        return entrances;
+    }
+
+    /** The way into the basement nearest this spot in it (null: none in the plan). */
+    public @Nullable BlockPos entranceNear(BlockPos pos) {
+        return entrances().stream().min(java.util.Comparator.comparingDouble(e -> e.distSqr(pos))).orElse(null);
+    }
+
+    /**
+     * Work in the basement for this bot (the "basement crew"): a block it carries to put in, the nearest one, down there under
+     * the plan's roof - written-off layers or not, below the layers the rest build in. Null if none.
+     */
+    public @Nullable Job basementJob(BotPlayer bot, long time) {
+        Schematic s = plan;
+        if (s == null) {
+            return null;
+        }
+        ServerLevel level = bot.level();
+        seenLevel = level;
+        boolean[] carried = new boolean[s.palette().size()];
+        boolean any = false;
+        for (int i = 0; i < carried.length; i++) {
+            LegacyBlocks.Spec spec = s.palette().get(i);
+            if (spec.kind() == LegacyBlocks.Kind.EXACT) {
+                Item item = itemFor(spec);
+                carried[i] = Inv.count(bot, stack -> stack.is(item)) > 0;
+                any |= carried[i];
+            }
+        }
+        if (!any) {
+            return null;
+        }
+        int end = groundLayer() * s.width() * s.length();
+        Job best = null;
+        double bestDistance = Double.MAX_VALUE;
+        int checked = 0;
+        for (int index = pending.nextSetBit(0); index >= 0 && index < end && checked < 40000; index = pending.nextSetBit(index + 1), checked++) {
+            LegacyBlocks.Spec spec = s.at(index);
+            if (spec.kind() != LegacyBlocks.Kind.EXACT || !carried[paletteIndex(index)]) {
+                continue;
+            }
+            if (claims.getOrDefault(index, 0L) > time && !bot.getUUID().equals(claimedBy.get(index)) || cooldowns.getOrDefault(index, 0L) > time) {
+                continue;
+            }
+            // In the basement: the cell, or one beside it (its walls and floors are the plan's blocks round its rooms)
+            BlockPos pos = worldPos(index);
+            if (!inBasement(index) && !inBasement(pos.above()) && !inBasement(pos.below()) && !inBasement(pos.north())
+                && !inBasement(pos.south()) && !inBasement(pos.east()) && !inBasement(pos.west())) {
+                continue;
+            }
+            Boolean there = seen(index);
+            if (there == null || there) {
+                continue;
+            }
+            BlockState state = level.getBlockState(pos);
+            if (!workable(level, pos, state, JobType.PLACE) || ProtectedAreas.isProtected(level, pos)) {
+                continue;
+            }
+            double distance = pos.distSqr(bot.blockPosition());
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = new Job(JobType.PLACE, pos, index, spec);
+            }
+        }
+        return best;
     }
 
     /** The plan's rooms under the ground: each with its size, what's still to build in and round it, and its ways up. */
