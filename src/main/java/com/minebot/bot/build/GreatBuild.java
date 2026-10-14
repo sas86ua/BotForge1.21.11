@@ -636,6 +636,22 @@ public final class GreatBuild extends SavedData {
         if (!any) {
             text.append("\n (carries no 8+ of anything the plan still wants)");
         }
+        // What the layers it builds in still want (cells to put in; held back: with something still to go under them)
+        for (int layer = lowest; layer <= lowest + UP_LAYERS && layer < schematic.height(); layer++) {
+            Map<Item, int[]> left = new java.util.HashMap<>();
+            for (int index = pending.nextSetBit(layer * size); index >= 0 && index < (layer + 1) * size; index = pending.nextSetBit(index + 1)) {
+                LegacyBlocks.Spec spec = schematic.at(index);
+                if (spec.kind() != LegacyBlocks.Kind.EXACT) {
+                    continue;
+                }
+                int[] entry = left.computeIfAbsent(itemFor(spec), i -> new int[2]);
+                entry[coversPending(index) ? 1 : 0]++;
+            }
+            text.append("\n layer ").append(layer).append(":");
+            left.entrySet().stream().sorted((a, b) -> b.getValue()[0] + b.getValue()[1] - a.getValue()[0] - a.getValue()[1]).limit(6)
+                .forEach(e -> text.append(" ").append(key(e.getKey()).replace("minecraft:", "")).append(" ")
+                    .append(e.getValue()[0]).append("+").append(e.getValue()[1]).append("held"));
+        }
         return text.toString();
     }
 
