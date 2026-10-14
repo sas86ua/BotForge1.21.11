@@ -843,6 +843,53 @@ public final class GreatBuild extends SavedData {
         return best;
     }
 
+    /** What can be put in now (up top in the layers built in; or in the basement), worked out every few seconds. */
+    private final Map<Boolean, Set<Item>> wantedNow = new java.util.HashMap<>();
+    private final Map<Boolean, Long> wantedNowAt = new java.util.HashMap<>();
+
+    /**
+     * The blocks there is a place for now: up top, the free cells of the layers being built in; for the basement crew, the
+     * basement's. The exchange through the site's chests goes by it: what a bot can't place, it leaves there; what's
+     * wanted, the others take out.
+     */
+    public Set<Item> wantedNow(ServerLevel level, boolean basement) {
+        long time = level.getGameTime();
+        Long at = wantedNowAt.get(basement);
+        if (at != null && time - at < 100 && time >= at) {
+            return wantedNow.get(basement);
+        }
+        wantedNowAt.put(basement, time);
+        Set<Item> items = new HashSet<>();
+        Schematic s = plan;
+        if (s != null) {
+            seenLevel = level;
+            int area = s.width() * s.length();
+            int from;
+            int to;
+            if (basement) {
+                from = 0;
+                to = groundLayer() * area;
+            } else {
+                int lowest = lowestPendingLayer(time);
+                from = lowest * area;
+                to = Math.min(s.height(), Math.max(lowest, lowestBusyLayer) + UP_LAYERS + 1) * area;
+            }
+            int checked = 0;
+            for (int index = pending.nextSetBit(from); index >= 0 && index < to && checked < 60000; index = pending.nextSetBit(index + 1), checked++) {
+                LegacyBlocks.Spec spec = s.at(index);
+                if (spec.kind() != LegacyBlocks.Kind.EXACT || !basement && coversPending(index)) {
+                    continue;
+                }
+                Item item = itemFor(spec);
+                if (!items.contains(item) && !Boolean.TRUE.equals(seen(index))) {
+                    items.add(item);
+                }
+            }
+        }
+        wantedNow.put(basement, Set.copyOf(items));
+        return wantedNow.get(basement);
+    }
+
     /** The plan's rooms under the ground: each with its size, what's still to build in and round it, and its ways up. */
     public String basement() {
         Schematic s = plan;

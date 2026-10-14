@@ -231,6 +231,57 @@ public class GreatBuildTask extends Task {
     }
 
     /** Out of materials: building blocks (or fill) out of the nearest chest on the site with some, anyone's (the camps' and any other). */
+    /** The blocks this bot has a place for now: up top, and for the basement crew the basement's too. */
+    private java.util.Set<net.minecraft.world.item.Item> wanted(GreatBuild build) {
+        java.util.Set<net.minecraft.world.item.Item> top = build.wantedNow(bot.level(), false);
+        if (!isBasementCrew(bot)) {
+            return top;
+        }
+        java.util.Set<net.minecraft.world.item.Item> both = new java.util.HashSet<>(top);
+        both.addAll(build.wantedNow(bot.level(), true));
+        return both;
+    }
+
+    private long nextLeaveAt;
+
+    /**
+     * The exchange: blocks of the plan it carries with no place for them now (wool for a layer far up, slabs for the basement it
+     * doesn't work in) left in the site chest nearest with room, for the bot that can use them - instead of standing there with
+     * them. True if it's off to do that.
+     */
+    private boolean leaveUnwanted(GreatBuild build) {
+        ServerLevel level = bot.level();
+        long now = level.getGameTime();
+        if (now < nextLeaveAt) {
+            return false;
+        }
+        nextLeaveAt = now + 20 * 60;
+        java.util.Set<net.minecraft.world.item.Item> wanted = wanted(build);
+        if (wanted.isEmpty()) {
+            return false;
+        }
+        Predicate<ItemStack> spare = stack -> !stack.isEmpty() && build.isMaterial(stack.getItem()) && !wanted.contains(stack.getItem())
+            && !GreatBuild.FILL.test(stack);
+        if (Inv.count(bot, spare) < 16) {
+            return false;
+        }
+        BlockPos best = null;
+        double bestDistance = (double) CHEST_RANGE * CHEST_RANGE;
+        for (BlockPos pos : build.siteChests(level)) {
+            double distance = pos.distSqr(bot.blockPosition());
+            if (distance < bestDistance && level.isLoaded(pos) && level.getBlockEntity(pos) instanceof ChestBlockEntity chest && hasRoom(chest)) {
+                best = pos;
+                bestDistance = distance;
+            }
+        }
+        if (best == null) {
+            return false;
+        }
+        bot.debug("great build: leaving what I can't place now in the chest at {}, for the others", best.toShortString());
+        child = CampChestTask.put(bot, best, spare);
+        return true;
+    }
+
     private boolean takeFromCampChest(GreatBuild build) {
         ServerLevel level = bot.level();
         long now = level.getGameTime();
@@ -238,7 +289,10 @@ public class GreatBuildTask extends Task {
             return false;
         }
         nextTakeAt = now + CHEST_RETRY_TICKS;
-        Predicate<ItemStack> useful = stack -> build.isMaterial(stack.getItem()) || GreatBuild.FILL.test(stack);
+        // What there's a place for now (its own part: the basement crew's down there) - not just any of the plan's blocks
+        java.util.Set<net.minecraft.world.item.Item> wanted = wanted(build);
+        Predicate<ItemStack> useful = stack -> (wanted.isEmpty() ? build.isMaterial(stack.getItem()) : wanted.contains(stack.getItem()))
+            || GreatBuild.FILL.test(stack);
         BlockPos best = null;
         double bestDistance = (double) CHEST_RANGE * CHEST_RANGE;
         for (BlockPos pos : build.siteChests(level)) {
@@ -658,6 +712,9 @@ public class GreatBuildTask extends Task {
             }
             boolean carries = carriesMaterial(build);
             // (nothing to do with what it carries - gray wool with no place for it yet: it stood there with it, the session long)
+            if (job == null && leaveUnwanted(build)) {
+                return Status.RUNNING;
+            }
             if ((job == null || job.type() != GreatBuild.JobType.PLACE) && (!carries || job == null) && !(digger && job != null)) {
                 // Out of materials: from a camp chest if there's some there, else from the mine under the site
                 if (takeFromCampChest(build) || restock(build)) {
