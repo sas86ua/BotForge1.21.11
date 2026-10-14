@@ -617,7 +617,7 @@ public final class GreatBuild extends SavedData {
             entry[0] = Math.min(entry[0], index / size);
             entry[1]++;
         }
-        StringBuilder text = new StringBuilder(bot.getPlainTextName() + ": building layers " + lowest + ".." + (lowest + UP_LAYERS)
+        StringBuilder text = new StringBuilder(bot.getPlainTextName() + ": building layers " + lowest + ".." + (Math.max(lowest, lowestBusyLayer) + UP_LAYERS)
             + " (the lowest unfinished one is " + lowest + ", height " + (origin.getY() + lowest) + ")");
         boolean any = false;
         for (Map.Entry<Item, int[]> entry : new java.util.TreeMap<Item, int[]>(java.util.Comparator.comparing(GreatBuild::key)) {{
@@ -828,6 +828,7 @@ public final class GreatBuild extends SavedData {
         // lowest near the bot (up on the finished part it went for the top, climbing pillars to it to put them up and
         // take them down again)
         int lowest = bottomUp ? lowestPendingLayer(time) : 0;
+        int windowBase = bottomUp ? Math.max(lowest, lowestBusyLayer) : 0; // (see computeLowestPendingLayer)
         Job best = null;
         double bestScore = Double.MAX_VALUE;
         int firstStep = -1;
@@ -835,7 +836,7 @@ public final class GreatBuild extends SavedData {
             if (bottomUp && step < lowest) {
                 continue;
             }
-            if (bottomUp && step > lowest + UP_LAYERS) {
+            if (bottomUp && step > windowBase + UP_LAYERS) {
                 break;
             }
             if (firstStep >= 0 && step > firstStep + LAYER_WINDOW) {
@@ -902,10 +903,22 @@ public final class GreatBuild extends SavedData {
         return lowestLayer;
     }
 
+    /**
+     * The first layer from the bottom with real work left in it (BUSY_CELLS or more): the layers the bots build in reach
+     * that far up from it. A few odd blocks nobody has (red beds, pressure plates, note blocks) held the lowest layer, and
+     * so the whole build, down at a layer long done: no work for the bots up the walls above. (Those few stay in reach.)
+     */
+    private int lowestBusyLayer;
+    private static final int BUSY_CELLS = 64;
+
     private int computeLowestPendingLayer() {
         Schematic schematic = plan;
         int layer = schematic.width() * schematic.length();
         int checked = 0;
+        int lowestFound = -1;
+        int countLayer = -1;
+        int count = 0;
+        lowestBusyLayer = floorLayer;
         for (int index = pending.nextSetBit(floorLayer * layer); index >= 0 && checked < 20000; index = pending.nextSetBit(index + 1), checked++) {
             LegacyBlocks.Spec spec = schematic.at(index);
             LegacyBlocks.Kind kind = spec.kind();
@@ -925,9 +938,21 @@ public final class GreatBuild extends SavedData {
             if (there) {
                 continue; // (in already: marked so now)
             }
-            return index / layer;
+            int at = index / layer;
+            if (lowestFound < 0) {
+                lowestFound = at;
+            }
+            if (at != countLayer) {
+                countLayer = at;
+                count = 0;
+            }
+            if (++count >= BUSY_CELLS) {
+                lowestBusyLayer = at;
+                return lowestFound;
+            }
         }
-        return floorLayer;
+        lowestBusyLayer = lowestFound >= 0 ? lowestFound : floorLayer;
+        return lowestFound >= 0 ? lowestFound : floorLayer;
     }
 
     /**
