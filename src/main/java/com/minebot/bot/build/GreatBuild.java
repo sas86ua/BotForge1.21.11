@@ -680,6 +680,37 @@ public final class GreatBuild extends SavedData {
         return text.toString();
     }
 
+    /** Every block a layer still wants (as far as seen in loaded chunks: what's in already is marked done on the way). */
+    public String leftIn(ServerLevel level, int layer) {
+        Schematic schematic = plan;
+        if (schematic == null || layer < 0 || layer >= schematic.height()) {
+            return "no such layer";
+        }
+        seenLevel = level;
+        int size = schematic.width() * schematic.length();
+        Map<Item, Integer> left = new java.util.TreeMap<>(java.util.Comparator.comparing(GreatBuild::key));
+        int unloaded = 0;
+        for (int index = pending.nextSetBit(layer * size); index >= 0 && index < (layer + 1) * size; index = pending.nextSetBit(index + 1)) {
+            LegacyBlocks.Spec spec = schematic.at(index);
+            if (spec.kind() != LegacyBlocks.Kind.EXACT) {
+                continue;
+            }
+            Boolean there = seen(index);
+            if (there == null) {
+                unloaded++;
+            } else if (!there) {
+                left.merge(itemFor(spec), 1, Integer::sum);
+            }
+        }
+        StringBuilder text = new StringBuilder("layer " + layer + " (height " + (origin.getY() + layer) + ") still wants:");
+        left.forEach((item, count) -> text.append(" ").append(key(item).replace("minecraft:", "")).append(" ").append(count)
+            .append(failures.getOrDefault(key(item), 0) >= 3 ? " (nobody can get it)" : "").append(","));
+        if (unloaded > 0) {
+            text.append(" + ").append(unloaded).append(" cells in chunks not loaded");
+        }
+        return text.toString();
+    }
+
     /** For the status: which layers are written off (below which height), and when that may start. */
     public String writeOffText() {
         if (floorLayer > 0) {

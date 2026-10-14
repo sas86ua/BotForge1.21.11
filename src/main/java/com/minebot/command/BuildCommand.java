@@ -48,6 +48,16 @@ final class BuildCommand {
             .then(Commands.literal("orders").executes(BuildCommand::orders))
             .then(Commands.literal("materials").executes(BuildCommand::materials))
             .then(Commands.literal("prep").executes(BuildCommand::prep))
+            .then(Commands.literal("left").then(Commands.argument("layer", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0))
+                .executes(ctx -> {
+                    GreatBuild build = existing(ctx);
+                    if (build == null) {
+                        return 0;
+                    }
+                    reply(ctx, build.leftIn(ctx.getSource().getServer().overworld(),
+                        com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "layer")));
+                    return 1;
+                })))
             .then(Commands.literal("why")
                 .then(Commands.argument("bot", StringArgumentType.word())
                     .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
