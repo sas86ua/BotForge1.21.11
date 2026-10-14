@@ -704,11 +704,24 @@ public final class GreatBuild extends SavedData {
         int ground = Math.max(0, Math.min(s.height() - 1, centre.getY() - origin.getY()));
         int w = s.width();
         int l = s.length();
+        // Under a roof: a block of the plan somewhere over it in its column (the open pit round the building is no room)
+        int[] roof = new int[w * l];
+        for (int z = 0; z < l; z++) {
+            for (int x = 0; x < w; x++) {
+                roof[z * w + x] = -1;
+                for (int y = s.height() - 1; y >= 0; y--) {
+                    if (!passableInPlan(s.index(x, y, z))) {
+                        roof[z * w + x] = y;
+                        break;
+                    }
+                }
+            }
+        }
         java.util.BitSet seen = new java.util.BitSet(s.size());
         StringBuilder text = new StringBuilder("Basement (layers 0.." + (ground - 1) + ", heights " + origin.getY() + ".." + (origin.getY() + ground - 1) + "):");
         int rooms = 0;
         for (int start = 0; start < ground * w * l; start++) {
-            if (seen.get(start) || !passableInPlan(start)) {
+            if (seen.get(start) || !passableInPlan(start) || start / (w * l) >= roof[start % (w * l)]) {
                 continue;
             }
             // One room: the passable cells joined to this one, under the ground
@@ -737,9 +750,10 @@ public final class GreatBuild extends SavedData {
                         continue;
                     }
                     int next = s.index(nx, ny, nz);
-                    if (ny >= ground) {
+                    boolean covered = ny < roof[nz * w + nx];
+                    if (ny >= ground || !covered) {
                         if (passableInPlan(next) && exits.size() < 4) {
-                            exits.add(worldPos(next)); // (open up into the ground floor: a way in)
+                            exits.add(worldPos(next)); // (open into the ground floor, or the open pit: a way in)
                         }
                         continue;
                     }
