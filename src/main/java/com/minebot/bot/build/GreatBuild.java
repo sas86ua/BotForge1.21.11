@@ -680,6 +680,97 @@ public final class GreatBuild extends SavedData {
         return text.toString();
     }
 
+    /** Can a bot pass through this cell of the plan (once built): empty, or a door, stairs, a slab, a ladder... */
+    private boolean passableInPlan(int index) {
+        LegacyBlocks.Spec spec = plan.at(index);
+        if (spec.kind() == LegacyBlocks.Kind.AIR || spec.kind() == LegacyBlocks.Kind.SKIP) {
+            return true;
+        }
+        BlockState state = spec.state();
+        if (state == null) {
+            return true;
+        }
+        return state.getCollisionShape(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, BlockPos.ZERO).isEmpty()
+            || state.is(net.minecraft.tags.BlockTags.DOORS) || state.is(net.minecraft.tags.BlockTags.FENCE_GATES)
+            || state.is(net.minecraft.tags.BlockTags.TRAPDOORS) || state.is(Blocks.LADDER);
+    }
+
+    /** The plan's rooms under the ground: each with its size, what's still to build in and round it, and its ways up. */
+    public String basement() {
+        Schematic s = plan;
+        if (s == null) {
+            return "no plan";
+        }
+        int ground = Math.max(0, Math.min(s.height() - 1, centre.getY() - origin.getY()));
+        int w = s.width();
+        int l = s.length();
+        java.util.BitSet seen = new java.util.BitSet(s.size());
+        StringBuilder text = new StringBuilder("Basement (layers 0.." + (ground - 1) + ", heights " + origin.getY() + ".." + (origin.getY() + ground - 1) + "):");
+        int rooms = 0;
+        for (int start = 0; start < ground * w * l; start++) {
+            if (seen.get(start) || !passableInPlan(start)) {
+                continue;
+            }
+            // One room: the passable cells joined to this one, under the ground
+            java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>();
+            queue.add(start);
+            seen.set(start);
+            int cells = 0;
+            int left = 0;
+            List<BlockPos> exits = new ArrayList<>();
+            int minY = Integer.MAX_VALUE;
+            int maxY = 0;
+            while (!queue.isEmpty()) {
+                int index = queue.poll();
+                cells++;
+                int y = index / (w * l);
+                int z = (index / w) % l;
+                int x = index % w;
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+                int[][] steps = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}, {0, -1, 0}};
+                for (int[] d : steps) {
+                    int nx = x + d[0];
+                    int ny = y + d[1];
+                    int nz = z + d[2];
+                    if (nx < 0 || nz < 0 || nx >= w || nz >= l || ny < 0) {
+                        continue;
+                    }
+                    int next = s.index(nx, ny, nz);
+                    if (ny >= ground) {
+                        if (passableInPlan(next) && exits.size() < 4) {
+                            exits.add(worldPos(next)); // (open up into the ground floor: a way in)
+                        }
+                        continue;
+                    }
+                    if (!passableInPlan(next)) {
+                        if (pending.get(next)) {
+                            left++; // (a wall, floor or ceiling of it still to build)
+                        }
+                        continue;
+                    }
+                    if (!seen.get(next)) {
+                        seen.set(next);
+                        queue.add(next);
+                    }
+                }
+            }
+            if (cells < 4) {
+                continue;
+            }
+            rooms++;
+            BlockPos at = worldPos(start);
+            text.append("\n room ").append(rooms).append(" at ").append(at.toShortString()).append(": ").append(cells).append(" cells, heights ")
+                .append(origin.getY() + minY).append("..").append(origin.getY() + maxY).append(", ").append(left).append(" blocks round it to build, ")
+                .append(exits.isEmpty() ? "NO way up" : "ways up at " + exits.stream().map(BlockPos::toShortString).toList());
+            if (rooms >= 25) {
+                text.append("\n ...");
+                break;
+            }
+        }
+        return text.toString();
+    }
+
     /** Every block a layer still wants (as far as seen in loaded chunks: what's in already is marked done on the way). */
     public String leftIn(ServerLevel level, int layer) {
         Schematic schematic = plan;
