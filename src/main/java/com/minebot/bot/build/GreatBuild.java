@@ -604,6 +604,7 @@ public final class GreatBuild extends SavedData {
         if (schematic == null) {
             return "no plan";
         }
+        seenLevel = bot.level();
         int size = schematic.width() * schematic.length();
         int lowest = computeLowestPendingLayer();
         Map<Item, int[]> wanted = new java.util.HashMap<>(); // item -> {lowest layer, cells pending}
@@ -748,6 +749,7 @@ public final class GreatBuild extends SavedData {
             return null;
         }
         ServerLevel level = bot.level();
+        seenLevel = level;
         long time = level.getGameTime();
         // Plan entries it has the block for
         boolean[] carried = new boolean[schematic.palette().size()];
@@ -916,6 +918,13 @@ public final class GreatBuild extends SavedData {
                     continue;
                 }
             }
+            Boolean there = seen(index);
+            if (there == null) {
+                continue; // (not loaded, nobody near: unknown, it doesn't hold the rest back)
+            }
+            if (there) {
+                continue; // (in already: marked so now)
+            }
             return index / layer;
         }
         return floorLayer;
@@ -933,7 +942,36 @@ public final class GreatBuild extends SavedData {
             if (kind == LegacyBlocks.Kind.AIR || kind == LegacyBlocks.Kind.SKIP) {
                 continue; // (open space between: what's under it counts)
             }
-            return pending.get(below);
+            if (!pending.get(below)) {
+                return false;
+            }
+            Boolean there = seen(below);
+            return there != null && !there; // (in already, or out of sight: it doesn't hold this one back)
+        }
+        return false;
+    }
+
+    /** The level the site was last looked at in (to see what's in already). */
+    private @Nullable ServerLevel seenLevel;
+
+    /**
+     * Is this cell's block in already, as the world has it now (marked so if it is)? Null: its chunk isn't loaded.
+     * (Thousands of cells of the lowest layer were in long since, still marked to do - only a bot carrying that very block
+     * ever looked at them - and held the whole of the layers above back: 46 cells of work for 15 bots.)
+     */
+    private @Nullable Boolean seen(int index) {
+        ServerLevel level = seenLevel;
+        if (level == null) {
+            return false;
+        }
+        BlockPos pos = worldPos(index);
+        LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null) {
+            return null;
+        }
+        if (isDone(plan.at(index), chunk.getBlockState(pos))) {
+            update(index, true);
+            return true;
         }
         return false;
     }
