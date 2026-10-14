@@ -155,8 +155,19 @@ public class EscapeTask extends Task {
         }
         if (Inv.count(bot, Inv::isScaffold) == 0) {
             // Nothing to put under it: a block of the hole's side broken first, for one (it falls by its feet)
+            // (head-high first; then at its feet - that opens a way out too, Glowstone had air all round its head, a step too
+            // high for it, and gave up; then the block over a step)
+            java.util.List<BlockPos> sides = new java.util.ArrayList<>();
             for (Direction direction : Direction.Plane.HORIZONTAL) {
-                BlockPos side = feet.above().relative(direction);
+                sides.add(feet.above().relative(direction));
+            }
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                sides.add(feet.relative(direction));
+            }
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                sides.add(feet.above(2).relative(direction));
+            }
+            for (BlockPos side : sides) {
                 if (!isOpen(level, side) && mustBreak(level, side)) {
                     bot.controller().lookAt(Vec3.atCenterOf(side));
                     breaker.start(side);
