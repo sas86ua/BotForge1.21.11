@@ -636,6 +636,30 @@ public final class GreatBuild extends SavedData {
         if (!any) {
             text.append("\n (carries no 8+ of anything the plan still wants)");
         }
+        // The lowest layer's free cells: why they can or can't be worked on now
+        int[] why = new int[5]; // workable, nothing to put it against, cooling down/claimed, not loaded, done meanwhile
+        ServerLevel level = bot.level();
+        long time = level.getGameTime();
+        for (int index = pending.nextSetBit(lowest * size); index >= 0 && index < (lowest + 1) * size; index = pending.nextSetBit(index + 1)) {
+            if (schematic.at(index).kind() != LegacyBlocks.Kind.EXACT || coversPending(index)) {
+                continue;
+            }
+            BlockPos pos = worldPos(index);
+            if (!level.isLoaded(pos)) {
+                why[3]++;
+            } else if (isDone(schematic.at(index), level.getBlockState(pos))) {
+                why[4]++;
+            } else if (claims.getOrDefault(index, 0L) > time || cooldowns.getOrDefault(index, 0L) > time) {
+                why[2]++;
+            } else if (workable(level, pos, level.getBlockState(pos), JobType.PLACE)) {
+                why[0]++;
+            } else {
+                why[1]++;
+            }
+        }
+        text.append("\n layer ").append(lowest).append(" free cells: ").append(why[0]).append(" workable, ").append(why[1])
+            .append(" nothing to put them against, ").append(why[2]).append(" claimed or cooling down, ").append(why[3])
+            .append(" not loaded, ").append(why[4]).append(" done already");
         // What the layers it builds in still want (cells to put in; held back: with something still to go under them)
         for (int layer = lowest; layer <= lowest + UP_LAYERS && layer < schematic.height(); layer++) {
             Map<Item, int[]> left = new java.util.HashMap<>();
