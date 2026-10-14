@@ -630,7 +630,8 @@ public class GreatBuildTask extends Task {
                 nextJobAt = bot.level().getGameTime() + 20 + bot.getRandom().nextInt(20);
             }
             boolean carries = carriesMaterial(build);
-            if ((job == null || job.type() != GreatBuild.JobType.PLACE) && !carries && !(digger && job != null)) {
+            // (nothing to do with what it carries - gray wool with no place for it yet: it stood there with it, the session long)
+            if ((job == null || job.type() != GreatBuild.JobType.PLACE) && (!carries || job == null) && !(digger && job != null)) {
                 // Out of materials: from a camp chest if there's some there, else from the mine under the site
                 if (takeFromCampChest(build) || restock(build)) {
                     dropJob(build);
