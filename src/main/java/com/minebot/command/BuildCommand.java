@@ -48,6 +48,16 @@ final class BuildCommand {
             .then(Commands.literal("orders").executes(BuildCommand::orders))
             .then(Commands.literal("materials").executes(BuildCommand::materials))
             .then(Commands.literal("prep").executes(BuildCommand::prep))
+            .then(Commands.literal("needs").executes(ctx -> {
+                GreatBuild build = existing(ctx);
+                if (build == null) {
+                    return 0;
+                }
+                int total = build.orders().values().stream().flatMap(m -> m.values().stream()).mapToInt(Integer::intValue).sum();
+                reply(ctx, build.needs(ctx.getSource().getServer().overworld(), Math.max(1000, total)) + "
+ (orders now ask for " + total + " blocks)");
+                return 1;
+            }))
             .then(Commands.literal("basement").executes(ctx -> {
                 GreatBuild build = existing(ctx);
                 if (build == null) {

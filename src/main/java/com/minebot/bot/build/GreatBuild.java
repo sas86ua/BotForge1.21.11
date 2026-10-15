@@ -1723,6 +1723,9 @@ public final class GreatBuild extends SavedData {
             if (excluded.contains(item) || failures.getOrDefault(key(item), 0) >= 3) {
                 continue;
             }
+            if (Boolean.TRUE.equals(seen(index))) {
+                continue; // (in already, only still marked to do: the orders asked for thousands of blocks long built)
+            }
             bill.merge(item, 1, Integer::sum);
             counted++;
         }
@@ -1738,9 +1741,19 @@ public final class GreatBuild extends SavedData {
         return id == null ? null : BuiltInRegistries.ITEM.getOptional(id).orElse(null);
     }
 
+    /** What the next {@code cells} blocks to put in are (as orders would have them), checked against the world. */
+    public String needs(ServerLevel level, int cells) {
+        seenLevel = level;
+        StringBuilder text = new StringBuilder("The next " + cells + " blocks to put in, bottom up:");
+        neededNext(cells, Set.of()).stream().limit(25).forEach(e -> text.append(" ").append(key(e.getKey()).replace("minecraft:", ""))
+            .append(" ").append(e.getValue()).append(","));
+        return text.toString();
+    }
+
     /** What every bot is to bring next time: the next blocks of the plan, 5-10 stacks each. */
     private void makeOrders(MinecraftServer server) {
         orders.clear();
+        seenLevel = server.overworld();
         failures.clear(); // (each round gets a fresh go: what failed may have been a passing trouble)
         if (plan == null) {
             return;
