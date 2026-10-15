@@ -51,7 +51,8 @@ public class EscapeTask extends Task {
     }
 
     private static boolean rawWanted(BotPlayer bot) {
-        if (underground(bot) && bot.areaSeconds() >= 120 && bot.stillSeconds() >= 60 && !bot.navigator().isActive()) {
+        // (time in the area, not "still": idling counts as resting, never still - Redstone idled two hours at the bottom of his mine)
+        if (underground(bot) && bot.areaSeconds() >= 300 && !bot.navigator().isActive() && !GreatBuildTask.isAway(bot)) {
             return true; // (down a pit with nothing to do, nothing tried: Copper, an hour at the bottom of one)
         }
         if (!underground(bot)) {
