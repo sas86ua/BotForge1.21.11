@@ -54,8 +54,7 @@ final class BuildCommand {
                     return 0;
                 }
                 int total = build.orders().values().stream().flatMap(m -> m.values().stream()).mapToInt(Integer::intValue).sum();
-                reply(ctx, build.needs(ctx.getSource().getServer().overworld(), Math.max(1000, total)) + "
- (orders now ask for " + total + " blocks)");
+                reply(ctx, build.needs(ctx.getSource().getServer().overworld(), Math.max(1000, total)) + "\n (orders now ask for " + total + " blocks)");
                 return 1;
             }))
             .then(Commands.literal("basement").executes(ctx -> {
