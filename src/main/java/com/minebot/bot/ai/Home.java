@@ -274,7 +274,11 @@ public final class Home {
         // The furnace it remembers stands outside the finished house (put up at the hut, or by the wall): the one inside, if
         // there's one, is its furnace; else it forgets that one and puts a new one in the house
         BlockPos furnace = memory.furnace();
-        if (furnace != null && level.isLoaded(furnace) && !plan.inFootprint(furnace)) {
+        BlockPos workshopAt = memory.workshop();
+        boolean byWorkshop = furnace != null && workshopAt != null && Math.abs(workshopAt.getX() - furnace.getX()) <= 8
+            && Math.abs(workshopAt.getZ() - furnace.getZ()) <= 8 && Math.abs(workshopAt.getY() - furnace.getY()) <= 2;
+        // (one in the workshop is in its place: "outside the house" was found again and again, and the same one taken - Deepslate)
+        if (furnace != null && level.isLoaded(furnace) && !plan.inFootprint(furnace) && !byWorkshop) {
             BlockPos inside = existingFurnace(bot, level);
             bot.debug("my furnace at {} is outside the house; {}", furnace.toShortString(),
                 inside != null ? "using the one at " + inside.toShortString() : "putting one in the house");
