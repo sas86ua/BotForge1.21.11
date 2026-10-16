@@ -373,6 +373,8 @@ public class EscapeTask extends Task {
     }
 
     private boolean digOut;
+    /** Ticks left of a way along before going up again (when up was barred). */
+    private int tunnelTicks;
     private @org.jetbrains.annotations.Nullable BlockPos start;
     private @org.jetbrains.annotations.Nullable BlockPos pillarBase;
     private @org.jetbrains.annotations.Nullable Direction away;
@@ -387,7 +389,10 @@ public class EscapeTask extends Task {
         BlockPos feet = bot.blockPosition();
         BlockPos home = bot.memory().home() != null && bot.memory().home().dimension() == level.dimension() ? bot.memory().home().pos() : null;
         boolean nearHome = home != null && Math.abs(feet.getX() - home.getX()) <= 10 && Math.abs(feet.getZ() - home.getZ()) <= 10;
-        if (nearHome) {
+        if (tunnelTicks > 0) {
+            tunnelTicks--;
+        }
+        if (nearHome || tunnelTicks > 0) {
             if (away == null) {
                 int dx = feet.getX() - home.getX();
                 int dz = feet.getZ() - home.getZ();
@@ -419,8 +424,10 @@ public class EscapeTask extends Task {
         BlockPos overHead = base.above(2);
         if (!isOpen(level, overHead)) {
             if (!mustBreak(level, overHead)) {
-                away = away == null ? Direction.NORTH : away.getClockWise();
-                return ++failures > 12 ? Status.FAILURE : Status.RUNNING;
+                // (water or lava over it, something it mustn't break: a way along for a while first, then up from there - it gave up at once)
+                away = away == null ? Direction.Plane.HORIZONTAL.getRandomDirection(bot.getRandom()) : away.getClockWise();
+                tunnelTicks = 20 * 10;
+                return ++failures > 8 ? Status.FAILURE : Status.RUNNING;
             }
             bot.controller().lookAt(Vec3.atCenterOf(overHead));
             breaker.start(overHead);
