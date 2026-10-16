@@ -84,6 +84,7 @@ public class VillageBuildTask extends Task {
     }
 
     public static boolean wanted(BotPlayer bot) {
+        loadLeftOut(bot.level().getServer());
         BotMemory memory = bot.memory();
         boolean ownHouse = memory.houseDone() && HousePlans.isSchematic(memory.houseTemplate());
         if (!memory.autonomous() || !Home.has(bot)
@@ -308,7 +309,7 @@ public class VillageBuildTask extends Task {
         int ground = 0;
         for (Blueprint.Cell cell : plan.cells()) {
             char kind = cell.kind();
-            if (kind != 'X' && kind != 'g' && kind != 's' || skipped.contains(cell.pos()) || claimedByOther(cell.pos())) {
+            if (kind != 'X' && kind != 'g' && kind != 's' || (skipped.contains(cell.pos()) || leftOutForGood(cell.pos())) || claimedByOther(cell.pos())) {
                 continue;
             }
             if (plan.isDone(cell, level.getBlockState(cell.pos()))) {
@@ -366,7 +367,7 @@ public class VillageBuildTask extends Task {
         List<Blueprint.Cell> cells = plan.cells();
         for (int i = cells.size() - 1; i >= 0; i--) {
             Blueprint.Cell cell = cells.get(i);
-            if (cell.kind() != '.' || skipped.contains(cell.pos()) || claimedByOther(cell.pos())) {
+            if (cell.kind() != '.' || (skipped.contains(cell.pos()) || leftOutForGood(cell.pos())) || claimedByOther(cell.pos())) {
                 continue;
             }
             BlockState state = level.getBlockState(cell.pos());
@@ -383,7 +384,7 @@ public class VillageBuildTask extends Task {
         ServerLevel level = bot.level();
         for (Blueprint.Cell cell : plan.cells()) {
             char kind = cell.kind();
-            if (kind != 'g' && kind != 's' || skipped.contains(cell.pos()) || claimedByOther(cell.pos())) {
+            if (kind != 'g' && kind != 's' || (skipped.contains(cell.pos()) || leftOutForGood(cell.pos())) || claimedByOther(cell.pos())) {
                 continue;
             }
             BlockState state = level.getBlockState(cell.pos());
@@ -399,7 +400,7 @@ public class VillageBuildTask extends Task {
     private Status build() {
         ServerLevel level = bot.level();
         for (Blueprint.Cell cell : plan.cells()) {
-            if (cell.kind() != 'X' || skipped.contains(cell.pos()) || claimedByOther(cell.pos())) {
+            if (cell.kind() != 'X' || (skipped.contains(cell.pos()) || leftOutForGood(cell.pos())) || claimedByOther(cell.pos())) {
                 continue;
             }
             BlockState state = level.getBlockState(cell.pos());
@@ -440,7 +441,7 @@ public class VillageBuildTask extends Task {
         for (Blueprint.Cell cell : plan.cells()) {
             if (cell.kind() == 'X') {
                 total++;
-                if (!plan.isDone(cell, level.getBlockState(cell.pos()))) {
+                if (!plan.isDone(cell, level.getBlockState(cell.pos())) && !leftOutForGood(cell.pos())) {
                     left++;
                 }
             }
@@ -526,8 +527,53 @@ public class VillageBuildTask extends Task {
         return ++workingTicks <= TICKS_PER_BLOCK;
     }
 
+    /** How many times the bots have left each cell out (all of them, all their goes): three, and it's left out for good. */
+    private static final Map<BlockPos, Integer> LEFT_OUT = new ConcurrentHashMap<>();
+    private static final int LEFT_OUT_FOR_GOOD = 3;
+
+    /** Left out three times over: not tried again (each new go tried it again - the church's tower top, twenty seconds a cell, for days). */
+    private static boolean leftOutForGood(BlockPos pos) {
+        return LEFT_OUT.getOrDefault(pos, 0) >= LEFT_OUT_FOR_GOOD;
+    }
+
+    /** Those left out for good, kept in minebot/village-left-out.txt over restarts (read once). */
+    private static volatile boolean leftOutLoaded;
+
+    private static java.nio.file.Path leftOutFile(net.minecraft.server.MinecraftServer server) {
+        return server.getServerDirectory().resolve("minebot").resolve("village-left-out.txt");
+    }
+
+    private static void loadLeftOut(net.minecraft.server.MinecraftServer server) {
+        if (leftOutLoaded) {
+            return;
+        }
+        leftOutLoaded = true;
+        try {
+            for (String line : java.nio.file.Files.readAllLines(leftOutFile(server))) {
+                String[] p = line.trim().split(" ");
+                if (p.length == 3) {
+                    LEFT_OUT.put(new BlockPos(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2])), LEFT_OUT_FOR_GOOD);
+                }
+            }
+        } catch (java.io.IOException | RuntimeException e) {
+            // (none yet)
+        }
+    }
+
     private void skip(BlockPos pos, String why) {
-        bot.debug("village: leaving out {} ({})", pos.toShortString(), why);
+        loadLeftOut(bot.level().getServer());
+        int times = LEFT_OUT.merge(pos.immutable(), 1, Integer::sum);
+        if (times == LEFT_OUT_FOR_GOOD) {
+            try {
+                java.nio.file.Files.createDirectories(leftOutFile(bot.level().getServer()).getParent());
+                java.nio.file.Files.writeString(leftOutFile(bot.level().getServer()), pos.getX() + " " + pos.getY() + " " + pos.getZ() + "
+",
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            } catch (java.io.IOException e) {
+                // (kept for this run only)
+            }
+        }
+        bot.debug("village: leaving out {} ({}){}", pos.toShortString(), why, times >= LEFT_OUT_FOR_GOOD ? " - for good" : "");
         skipped.add(pos);
         working = null;
         bot.navigator().stop();
