@@ -566,7 +566,9 @@ public class EscapeTask extends Task {
     private static boolean mustBreak(ServerLevel level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
         return canBreak(level, pos) || !state.isAir() && state.getFluidState().isEmpty() && !state.hasBlockEntity()
-            && state.getDestroySpeed(level, pos) >= 0 && !ProtectedAreas.isProtected(level, pos);
+            && state.getDestroySpeed(level, pos) >= 0 && (!ProtectedAreas.isProtected(level, pos)
+                // (shut in inside a no-go area - Obsidian, under the village: the rock round it may go, to get out; never by a player's bed)
+                || !ProtectedAreas.nearRespawn(level, pos) && com.minebot.bot.world.BlockRules.isNaturalTerrain(state));
     }
 
     private static boolean canBreak(ServerLevel level, BlockPos pos) {

@@ -54,6 +54,11 @@ public final class ProtectedAreas {
         }
     }
 
+    /** By a real player's respawn point (their bed, their base). */
+    public static boolean nearRespawn(ServerLevel level, BlockPos pos) {
+        return near(onlineRespawns, level, pos, RADIUS) || near(offlineRespawns, level, pos, RADIUS);
+    }
+
     public static boolean isProtected(ServerLevel level, BlockPos pos) {
         return near(onlineRespawns, level, pos, RADIUS) || near(offlineRespawns, level, pos, RADIUS)
             || NoGoAreas.contains(level, pos);

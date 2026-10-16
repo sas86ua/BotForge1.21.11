@@ -63,6 +63,9 @@ public class ExploreTask extends Task {
             if (dx * dx + dz * dz > (long) (BotMemory.ZONE_RADIUS - 50) * (BotMemory.ZONE_RADIUS - 50)) {
                 continue;
             }
+            if (com.minebot.bot.world.NoGoAreas.contains(level, new BlockPos(x, bot.getBlockY(), z))) {
+                continue; // (not into a no-go area: nothing may be done there, Obsidian got shut in under the village)
+            }
             if (homeward && Math.sqrt(new BlockPos(x, homePos.getY(), z).distSqr(homePos)) > homeDistance - distance * 0.3) {
                 continue;
             }
