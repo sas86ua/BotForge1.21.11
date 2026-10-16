@@ -250,6 +250,14 @@ public final class BotManager {
      * away, as it would without bots. They wake up when someone joins.
      */
     private static void checkEmpty(MinecraftServer server) {
+        if (stayAwake(server)) {
+            // (an admin watching them: kept going with nobody on - and woken if asleep)
+            emptyTicks = 0;
+            if (BOTS.isEmpty() && server.getTickCount() % 200 == 0) {
+                restoreOnline(server);
+            }
+            return;
+        }
         int pauseSeconds = server instanceof DedicatedServer dedicated ? dedicated.pauseWhenEmptySeconds() : 0;
         if (pauseSeconds <= 0 || BOTS.isEmpty()) {
             emptyTicks = 0;
@@ -268,6 +276,19 @@ public final class BotManager {
         BOTS.clear();
         emptyTicks = 0;
         pauseNow(server, pauseSeconds);
+    }
+
+    private static boolean stayAwake;
+    private static long stayAwakeAt = Long.MIN_VALUE / 4;
+
+    /** The file minebot/stay-awake there: the bots don't fall asleep with nobody on (for watching them; looked for every 10 s). */
+    private static boolean stayAwake(MinecraftServer server) {
+        long now = server.getTickCount();
+        if (now - stayAwakeAt >= 200 || now < stayAwakeAt) {
+            stayAwakeAt = now;
+            stayAwake = java.nio.file.Files.exists(server.getServerDirectory().resolve("minebot").resolve("stay-awake"));
+        }
+        return stayAwake;
     }
 
     /** Vanilla only starts counting once the bots are gone; skip the wait, it's been empty long enough. */
