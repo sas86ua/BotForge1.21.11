@@ -92,6 +92,9 @@ public class Navigator {
     /** Steps that keep failing, by target position; after a few tries the spot is avoided. */
     private final Long2IntOpenHashMap stepFailures = new Long2IntOpenHashMap();
     private final LongOpenHashSet avoid = new LongOpenHashSet();
+    /** When a step last failed: the spots to avoid are kept for a few minutes after, over new ways. */
+    private long avoidAt = Long.MIN_VALUE / 4;
+    private static final long AVOID_TICKS = 20 * 60 * 3;
     /** Where a ladder wouldn't go up (twice): planned some other way (a pillar, steps) from then on. */
     private final LongOpenHashSet noLadder = new LongOpenHashSet();
     private @Nullable String lastRefused;
@@ -122,8 +125,12 @@ public class Navigator {
         this.maxNodes = maxNodes;
         stop(); // (out on the water it stays in the boat; it gets out where the way ahead is land)
         escape = false;
-        stepFailures.clear();
-        avoid.clear();
+        if (bot.level().getGameTime() - avoidAt > AVOID_TICKS || bot.level().getGameTime() < avoidAt) {
+            // (kept a while over new ways: a hunt or a trip asks for one every few seconds, and the step into the cave pool that
+            // kept timing out was tried again on each - Zola, an hour on one spot)
+            stepFailures.clear();
+            avoid.clear();
+        }
         this.goal = goal;
         this.failedReplans = 0;
         this.stalledPartials = 0;
@@ -432,8 +439,10 @@ public class Navigator {
         }
         if (breaker.target() == null && ++stepTicks > STEP_TIMEOUT) {
             long key = next.pos().asLong();
+            avoidAt = bot.level().getGameTime();
             if (stepFailures.addTo(key, 1) >= 2) {
                 avoid.add(key); // third time this step failed: plan around it
+                avoidAt = bot.level().getGameTime();
             }
             replan("step " + next.move() + " to " + next.pos().toShortString() + " timed out");
             return;
