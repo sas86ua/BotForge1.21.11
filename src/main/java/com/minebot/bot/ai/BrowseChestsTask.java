@@ -47,14 +47,26 @@ public class BrowseChestsTask extends Task {
         super(bot);
         this.chest = chest;
         this.atHome = true;
+        if (chest != null) {
+            // (gone to once: not again for a while, taken or not - one it couldn't get to, or whose "better" gear it couldn't use,
+            // was gone to again and again, "stored gear" failing or finishing at once a hundred times a night)
+            GEAR_TRIED.computeIfAbsent(bot.getUUID(), u -> new java.util.concurrent.ConcurrentHashMap<>())
+                .put(chest.immutable(), bot.level().getGameTime() + GEAR_RETRY);
+        }
     }
 
     /**
      * A chest it may take from (its own, or anyone's nearby) holding armour better than
      * what it wears, or null.
      */
+    private static final java.util.Map<java.util.UUID, java.util.Map<BlockPos, Long>> GEAR_TRIED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long GEAR_RETRY = 24000L;
+
     public static @Nullable BlockPos storedUpgrade(BotPlayer bot) {
         for (RandomizableContainerBlockEntity container : ChestTask.reachable(bot)) {
+            if (GEAR_TRIED.getOrDefault(bot.getUUID(), java.util.Map.of()).getOrDefault(container.getBlockPos(), 0L) > bot.level().getGameTime()) {
+                continue;
+            }
             for (int i = 0; i < container.getContainerSize(); i++) {
                 if (isGearUpgrade(bot, container.getItem(i))) {
                     return container.getBlockPos();
