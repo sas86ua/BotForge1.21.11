@@ -724,7 +724,7 @@ public class SheepPenTask extends Task {
         boolean atGate = inGateway() || bot.blockPosition().equals(from)
             || bot.position().distanceTo(Vec3.atBottomCenterOf(from)) < 0.8;
         if (!atGate) {
-            if (bot.position().distanceTo(Vec3.atBottomCenterOf(from)) < 2.5) {
+            if (bot.position().distanceTo(Vec3.atBottomCenterOf(from)) < 2.5 && bot.getBlockY() == from.getY()) { // (a step up or down to it: the way, not straight - Sunny pushed at the bank under her gate)
                 // (a step off: the path "reached" at once, 0.7 from the middle, and it stood there for good - Zealot at its gate)
                 bot.navigator().stop();
                 bot.controller().moveTowards(Vec3.atBottomCenterOf(from), false, false);
