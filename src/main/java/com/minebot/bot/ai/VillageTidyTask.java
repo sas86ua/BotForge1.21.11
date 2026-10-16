@@ -49,7 +49,7 @@ public class VillageTidyTask extends Task {
 
     public static boolean wanted(BotPlayer bot) {
         return bot.memory().autonomous() && !Home.isNight(bot) && !GreatBuildTask.isAway(bot) && !GreatBuildTask.sessionOn(bot)
-            && bot.every("village tidy trip", 20 * 60, () -> next(bot) != null);
+            && next(bot) != null; // (looked at each time - cheap; kept a minute, it was started and done at once over and over)
     }
 
     @Override
