@@ -566,8 +566,7 @@ public class VillageBuildTask extends Task {
         if (times == LEFT_OUT_FOR_GOOD) {
             try {
                 java.nio.file.Files.createDirectories(leftOutFile(bot.level().getServer()).getParent());
-                java.nio.file.Files.writeString(leftOutFile(bot.level().getServer()), pos.getX() + " " + pos.getY() + " " + pos.getZ() + "
-",
+                java.nio.file.Files.writeString(leftOutFile(bot.level().getServer()), pos.getX() + " " + pos.getY() + " " + pos.getZ() + "\n",
                     java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
             } catch (java.io.IOException e) {
                 // (kept for this run only)
