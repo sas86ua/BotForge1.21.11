@@ -83,8 +83,12 @@ public class ObtainTask extends Task {
                 failed.add(strategy);
                 // (and for a while for the next tries too: "3 coal: mine coal ore", failing, chosen again each minute by each new try -
                 // Bedrock, for his torches; charcoal from logs was never tried)
-                RECENTLY_FAILED.computeIfAbsent(bot.getUUID(), u -> new java.util.concurrent.ConcurrentHashMap<>())
-                    .put(strategy, bot.level().getGameTime() + RECENT_FAILURE_TICKS);
+                if (strategy instanceof Planner.MineStrategy || strategy instanceof Planner.KillStrategy) {
+                    // (only finding it in the world: a craft that failed once - no spot for the table - was barred for all, and
+                    // "no way to get a furnace" came many times a second)
+                    RECENTLY_FAILED.computeIfAbsent(bot.getUUID(), u -> new java.util.concurrent.ConcurrentHashMap<>())
+                        .put(strategy, bot.level().getGameTime() + RECENT_FAILURE_TICKS);
+                }
                 strategy = null;
             } else if (childIsStep) {
                 strategy = null; // re-plan with the new inventory
