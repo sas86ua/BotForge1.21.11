@@ -38,6 +38,10 @@ public class ObtainTask extends Task {
     /** Asked for by a person: may dig for diamonds, emeralds or gold (otherwise only dug on journeys). */
     private boolean digValuables;
 
+    /** Ways that failed lately, per bot: not chosen again for a while (each new task tried the same failing one first). */
+    private static final java.util.Map<java.util.UUID, java.util.Map<Planner.Strategy, Long>> RECENTLY_FAILED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long RECENT_FAILURE_TICKS = 20 * 60 * 10;
+
     public ObtainTask(BotPlayer bot, Target target, int depth) {
         super(bot);
         this.target = target;
@@ -77,6 +81,10 @@ public class ObtainTask extends Task {
                 // A failed ingredient/tool or the strategy's own step: try another way
                 bot.debug("{}: {} failed ({})", target, strategy, childState);
                 failed.add(strategy);
+                // (and for a while for the next tries too: "3 coal: mine coal ore", failing, chosen again each minute by each new try -
+                // Bedrock, for his torches; charcoal from logs was never tried)
+                RECENTLY_FAILED.computeIfAbsent(bot.getUUID(), u -> new java.util.concurrent.ConcurrentHashMap<>())
+                    .put(strategy, bot.level().getGameTime() + RECENT_FAILURE_TICKS);
                 strategy = null;
             } else if (childIsStep) {
                 strategy = null; // re-plan with the new inventory
@@ -103,7 +111,8 @@ public class ObtainTask extends Task {
 
     private @Nullable Planner.Strategy choose() {
         for (Planner.Scored scored : new Planner(bot).options(target)) {
-            if (!failed.contains(scored.strategy())) {
+            if (!failed.contains(scored.strategy()) && RECENTLY_FAILED.getOrDefault(bot.getUUID(), java.util.Map.of())
+                .getOrDefault(scored.strategy(), 0L) <= bot.level().getGameTime()) {
                 return scored.strategy();
             }
         }
