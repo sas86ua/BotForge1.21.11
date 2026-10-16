@@ -398,6 +398,15 @@ public class PathFinder {
         return cost;
     }
 
+    /** How far down it may jump: three blocks; getting out of a fix (stranded on a ledge of old scaffolding), as far as its
+     * health takes without coming near to dying (Sunny stood on one at the Great Build after a session, six blocks up). */
+    private int maxFall() {
+        if (!options.escape()) {
+            return MAX_SAFE_FALL;
+        }
+        return Math.max(MAX_SAFE_FALL, Math.min(8, (int) bot.getHealth() - 6 + MAX_SAFE_FALL));
+    }
+
     private void expandDescend(Node from, int tx, int y, int tz, double clear) {
         for (int fall = 1; fall <= MAX_WATER_FALL; fall++) {
             int ty = y - fall;
@@ -412,7 +421,7 @@ public class PathFinder {
             if (!passable(tx, ty, tz, state)) {
                 int landY = ty + 1;
                 int height = y - landY;
-                if (height >= 1 && height <= MAX_SAFE_FALL && BlockRules.isStandable(level, cursor.set(tx, ty, tz), state)) {
+                if (height >= 1 && height <= maxFall() && BlockRules.isStandable(level, cursor.set(tx, ty, tz), state)) {
                     add(from, tx, landY, tz, WALK + FALL_PER_BLOCK * height + clear, Move.DESCEND);
                 }
                 return;

@@ -62,6 +62,9 @@ public class EscapeTask extends Task {
             if (bot.areaSeconds() >= 60 && bot.recentNavFailures(20 * 60) >= 3 && boxedIn(bot)) { // (in the area: hopping there it is never "still")
                 return true; // (see boxedIn)
             }
+            if (stranded(bot)) {
+                return true; // (see stranded)
+            }
             return bot.stillSeconds() >= 20 && (bot.recentNavFailures(20 * 60) >= 4 || bot.stillSeconds() >= 60)
                 && bot.every("sealed in", 100, () -> enclosure(bot) != null);
         }
@@ -187,6 +190,41 @@ public class EscapeTask extends Task {
     }
 
     private boolean boxed;
+
+    /**
+     * Out in the open but going nowhere: no ways found for minutes, in the same few blocks (on a ledge of old scaffolding six
+     * blocks up, a jump too far for the ways - Sunny and Obsidian at the Great Build after a session).
+     */
+    private static boolean stranded(BotPlayer bot) {
+        return !underground(bot) && bot.recentNavFailures(20 * 60) >= 4 && bot.areaSeconds() >= 120 && !bot.isSleeping();
+    }
+
+    private boolean strandedMode;
+    private @org.jetbrains.annotations.Nullable BlockPos strandedFrom;
+
+    /** A way home, or anywhere off the spot, with the bolder ways of getting out (a longer jump down, digging) */
+    private Status unstrand() {
+        if (++ticks > 20 * 90) {
+            return Status.FAILURE;
+        }
+        if (strandedFrom == null) {
+            strandedFrom = bot.blockPosition();
+            var home = bot.memory().home();
+            BlockPos to = home != null && home.dimension() == bot.level().dimension() ? home.pos() : bot.memory().anchor().pos();
+            bot.debug("stranded here; finding a way off, a longer jump down if need be");
+            bot.navigator().navigateEscape(Goal.column(to.getX(), to.getZ(), 16));
+        }
+        if (!bot.blockPosition().closerThan(strandedFrom, 8)) {
+            bot.navigator().stop();
+            bot.clearNavFailures();
+            return Status.SUCCESS;
+        }
+        var status = bot.navigator().tick();
+        if (status.ended() && status != com.minebot.bot.path.Navigator.Status.SUCCESS) {
+            return Status.FAILURE;
+        }
+        return Status.RUNNING;
+    }
     /** Tried the way down already (the block under it broken): up from here on. */
     private boolean down;
 
@@ -312,6 +350,12 @@ public class EscapeTask extends Task {
         }
         if (boxed) {
             return unbox();
+        }
+        if (ticks == 0 && !strandedMode && !sealed && stranded(bot) && enclosure(bot) == null) {
+            strandedMode = true;
+        }
+        if (strandedMode) {
+            return unstrand();
         }
         if (!sealed && !underground(bot)) {
             if (ticks == 0) {
