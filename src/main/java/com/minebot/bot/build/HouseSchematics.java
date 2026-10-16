@@ -153,6 +153,40 @@ public final class HouseSchematics {
     /** The kinds of wood a house can be built of (0: as the plan has it). */
     public static final String[] WOODS = {"", "oak", "spruce", "birch", "jungle", "acacia", "dark_oak", "mangrove", "cherry", "pale_oak"};
 
+    /** Which of {@link #WOODS} an item or block of wood is of (by its name); 0: none. */
+    public static int woodOf(String path) {
+        int best = 0;
+        for (int i = 1; i < WOODS.length; i++) {
+            if ((path.startsWith(WOODS[i] + "_") || path.contains("_" + WOODS[i] + "_")) && (best == 0 || WOODS[i].length() > WOODS[best].length())) {
+                best = i; // (the longest name that fits: dark_oak, not oak)
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The same block but of another wood (spruce stairs for oak ones, turned the same way): a house whose wood changed half
+     * way (none of it to be had any more) counts what went in of the old one as built.
+     */
+    public static boolean sameButWood(@org.jetbrains.annotations.Nullable BlockState want, BlockState have) {
+        if (want == null || want.getBlock() == have.getBlock()) {
+            return false;
+        }
+        String a = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(want.getBlock()).getPath();
+        String b = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(have.getBlock()).getPath();
+        int wa = woodOf(a);
+        int wb = woodOf(b);
+        if (wa == 0 || wb == 0 || !a.replace(WOODS[wa], "*").equals(b.replace(WOODS[wb], "*"))) {
+            return false;
+        }
+        for (Property<?> property : want.getProperties()) {
+            if (!have.hasProperty(property) || !have.getValue(property).equals(want.getValue(property))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** The plan's block, of the bot's own wood (the trees round its home) instead of the plan's. */
     public static @org.jetbrains.annotations.Nullable BlockState adapt(BlockState state, int wood) {
         BlockState adapted = adapt(state);

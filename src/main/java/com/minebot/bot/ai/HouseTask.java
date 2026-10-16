@@ -185,6 +185,23 @@ public class HouseTask extends Task {
             bot.setMiningRule(null);
             if (status == Status.FAILURE && stage == Stage.MATERIALS) {
                 if (plan != null && plan.fromSchematic() && getting != null) {
+                    // Its wood (acacia, the trees round it when it was planned - cut down since): the house goes on in the wood that
+                    // grows round it now (what went in of the old wood counts as built). Bedrock and Obsidian went looking for acacia for days
+                    BotMemory memory = bot.memory();
+                    int template = memory.houseTemplate();
+                    int wood = com.minebot.bot.build.HouseSchematics.woodOf(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(getting).getPath());
+                    if (HousePlans.isSchematic(template) && wood > 0 && wood == (template - HousePlans.SCHEMATIC_BASE) / 10) {
+                        int local = localWood();
+                        if (local != wood) {
+                            int index = HousePlans.index((template - HousePlans.SCHEMATIC_BASE) % 10, local);
+                            memory.setHouseSite(memory.houseOrigin(), memory.houseFront(), index);
+                            plan = HousePlans.create(index, memory.houseOrigin(), memory.houseFront());
+                            bot.debug("house: no {} to be had; building on in {}", com.minebot.bot.build.HouseSchematics.WOODS[wood],
+                                com.minebot.bot.build.HouseSchematics.WOODS[local]);
+                            getting = null;
+                            return Status.RUNNING;
+                        }
+                    }
                     // (one thing it can't get - a dye, deepslate...: those blocks are left out for now, the rest goes on)
                     bot.debug("house: can't get {}; leaving those blocks out for now", getting);
                     UNOBTAINABLE.computeIfAbsent(bot.getUUID(), u -> new ConcurrentHashMap<>())

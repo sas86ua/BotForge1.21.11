@@ -337,7 +337,8 @@ public final class SchematicHouse implements HousePlan {
             case 's' -> !state.canBeReplaced() && state.getFluidState().isEmpty(); // (grass or dirt, or the rock that's there)
             case 'B' -> state.is(BlockTags.BEDS);
             case 'T' -> state.is(Blocks.CRAFTING_TABLE);
-            case 'X' -> GreatBuild.isDone(new LegacyBlocks.Spec(LegacyBlocks.Kind.EXACT, cell.state()), state);
+            case 'X' -> GreatBuild.isDone(new LegacyBlocks.Spec(LegacyBlocks.Kind.EXACT, cell.state()), state)
+                || HouseSchematics.sameButWood(cell.state(), state); // (the house's wood changed half way: the old wood counts)
             default -> true;
         };
     }
