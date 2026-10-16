@@ -48,6 +48,9 @@ public final class Needs {
         // Somehow outside its zone (teleported...): walk back in first
         new Need("back to zone", Needs::outsideZone, bot -> new GoToTask(bot, Goal.column(
             bot.memory().anchor().pos().getX(), bot.memory().anchor().pos().getZ(), BotMemory.ZONE_RADIUS - 100))),
+        // Far from home for no reason (lost, wandered off trip by trip): home again - not on a journey, not at the Great Build
+        new Need("way home", Needs::strayedFar, bot -> new GoToTask(bot, Goal.column(bot.memory().home().pos().getX(),
+            bot.memory().home().pos().getZ(), 12))),
         new Need("food stock", bot -> !JourneyTask.isTravelling(bot) && !GreatBuildTask.isAway(bot) // (a journey sees to its own food)
                 && (Inv.count(bot, Food::isCooked) < LOW_FOOD // (and before one sets off, enough for the road)
                     || JourneyTask.isDue(bot) && Inv.count(bot, Food::isCooked) < JourneyTask.ROAD_FOOD),
@@ -243,6 +246,16 @@ public final class Needs {
         // Iron at home: 3-6 blocks of iron and 12-36 ingots (ingots into blocks, or blocks back into ingots)
         new Need("iron storage", IronStockTask::wanted, IronStockTask::new)
     );
+
+    /** Further than this from home with nothing taking it there, it goes home. */
+    private static final int STRAYED = 300;
+
+    private static boolean strayedFar(BotPlayer bot) {
+        var home = bot.memory().home();
+        return home != null && home.dimension() == bot.level().dimension() && bot.memory().autonomous()
+            && bot.journey() == null && !GreatBuildTask.isAway(bot) && !GreatBuildTask.sessionOn(bot)
+            && !home.pos().closerThan(bot.blockPosition(), STRAYED);
+    }
 
     private Needs() {
     }
