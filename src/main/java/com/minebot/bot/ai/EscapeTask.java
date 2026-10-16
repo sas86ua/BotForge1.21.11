@@ -427,6 +427,19 @@ public class EscapeTask extends Task {
             return Status.RUNNING;
         }
         // Pillar up: jump, and a block under its feet at the top of the jump
+        if (Inv.count(bot, Inv::isScaffold) == 0) {
+            // Nothing to stand on: a block of the wall beside it first, for one (Obsidian, in a cave pocket with an empty bag, gave up
+            // in a second)
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                for (BlockPos side : new BlockPos[] {base.relative(direction), base.above().relative(direction)}) {
+                    if (!isOpen(level, side) && mustBreak(level, side)) {
+                        bot.controller().lookAt(Vec3.atCenterOf(side));
+                        breaker.start(side);
+                        return Status.RUNNING;
+                    }
+                }
+            }
+        }
         bot.controller().hold(Vec3.atBottomCenterOf(base));
         bot.setXRot(90.0F);
         bot.setJumping(true);
