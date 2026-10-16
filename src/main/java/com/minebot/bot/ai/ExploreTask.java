@@ -17,6 +17,9 @@ public class ExploreTask extends Task {
     private int targetZ;
     private boolean started;
 
+    /** Further than this from home, it explores only towards home. */
+    private static final int HOME_RANGE = 120;
+
     public ExploreTask(BotPlayer bot, int distance) {
         super(bot);
         this.distance = distance;
@@ -39,6 +42,11 @@ public class ExploreTask extends Task {
 
     private void pickTarget() {
         BlockPos anchor = bot.memory().anchor().pos();
+        // Far from home already: a trip only home-wards (trip after trip at random, Obsidian ended up 950 blocks away looking for logs)
+        var home = bot.memory().home();
+        BlockPos homePos = home != null && home.dimension() == bot.level().dimension() ? home.pos() : null;
+        double homeDistance = homePos == null ? 0 : Math.sqrt(bot.blockPosition().distSqr(homePos));
+        boolean homeward = homePos != null && homeDistance > HOME_RANGE;
         net.minecraft.server.level.ServerLevel level = bot.level();
         // Land: animals, trees and ore aren't out at sea. Where it can see, it skips water; where it
         // can't (not loaded), it may be land; open water only if nothing else turns up
@@ -52,6 +60,9 @@ public class ExploreTask extends Task {
             long dx = x - anchor.getX();
             long dz = z - anchor.getZ();
             if (dx * dx + dz * dz > (long) (BotMemory.ZONE_RADIUS - 50) * (BotMemory.ZONE_RADIUS - 50)) {
+                continue;
+            }
+            if (homeward && Math.sqrt(new BlockPos(x, homePos.getY(), z).distSqr(homePos)) > homeDistance - distance * 0.3) {
                 continue;
             }
             if (level.getChunkSource().getChunkNow(x >> 4, z >> 4) == null) {
