@@ -71,6 +71,7 @@ public class GreatBuildTask extends Task {
     private Stage stage;
     private @Nullable Task child;
     private boolean childIsRestock;
+    private long restockAt;
     private @Nullable Item restockItem;
     private final Set<Item> packed = new HashSet<>();
     private final Set<Item> cantGet = new HashSet<>();
@@ -484,6 +485,7 @@ public class GreatBuildTask extends Task {
                 build.restocking(bot, false);
                 if (status == Status.FAILURE && restockItem != null) {
                     bot.debug("great build: couldn't get {}", GreatBuild.key(restockItem));
+                    restockAt = bot.level().getGameTime() + 20 * 30; // (not straight away again: it went round many times a second)
                     cantGet.add(restockItem);
                     build.failed(restockItem);
                 }
@@ -858,6 +860,9 @@ public class GreatBuildTask extends Task {
      * the bots at most; the rest dig and fill).
      */
     private boolean restock(GreatBuild build) {
+        if (bot.level().getGameTime() < restockAt) {
+            return false;
+        }
         int atSite = 0;
         for (var entry : AWAY.values()) {
             if (entry == Stage.WORK) {
