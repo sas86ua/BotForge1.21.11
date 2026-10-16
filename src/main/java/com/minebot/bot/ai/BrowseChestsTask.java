@@ -140,6 +140,10 @@ public class BrowseChestsTask extends Task {
     @Override
     public Status tick() {
         if (chest == null) {
+            if (atHome) {
+                bot.every("stored gear", 0, () -> false); // (none any more since the need was looked at: looked at again next time)
+                return Status.SUCCESS;
+            }
             return Status.FAILURE;
         }
         if (!(bot.level().getBlockEntity(chest) instanceof RandomizableContainerBlockEntity container)) {
