@@ -113,7 +113,14 @@ public final class Sources {
     public static List<Item> dropsOf(Mine mine) {
         if (mine == LOGS) {
             List<Item> logs = new ArrayList<>();
-            BuiltInRegistries.ITEM.getTagOrEmpty(ItemTags.LOGS).forEach(holder -> logs.add(holder.value()));
+            // (what grows here: not the Nether's stems, not stripped logs - "any planks" was made crimson planks, and it went
+            // looking for crimson stems in the overworld for hours; stripped ones are made with an axe, not found)
+            BuiltInRegistries.ITEM.getTagOrEmpty(ItemTags.LOGS).forEach(holder -> {
+                String path = BuiltInRegistries.ITEM.getKey(holder.value()).getPath();
+                if (!path.contains("crimson") && !path.contains("warped") && !path.startsWith("stripped_")) {
+                    logs.add(holder.value());
+                }
+            });
             return logs;
         }
         if (mine == STONE) {
