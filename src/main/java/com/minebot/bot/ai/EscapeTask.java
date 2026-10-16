@@ -431,7 +431,8 @@ public class EscapeTask extends Task {
             // Nothing to stand on: a block of the wall beside it first, for one (Obsidian, in a cave pocket with an empty bag, gave up
             // in a second)
             for (Direction direction : Direction.Plane.HORIZONTAL) {
-                for (BlockPos side : new BlockPos[] {base.relative(direction), base.above().relative(direction)}) {
+                for (BlockPos side : new BlockPos[] {base.relative(direction), base.above().relative(direction), base.above(2).relative(direction),
+                        base.above(3), base.below()}) { // (in an open cave: the roof over it, or the floor)
                     if (!isOpen(level, side) && mustBreak(level, side)) {
                         bot.controller().lookAt(Vec3.atCenterOf(side));
                         breaker.start(side);
