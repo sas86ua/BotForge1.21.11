@@ -46,7 +46,8 @@ public class ExploreTask extends Task {
         var home = bot.memory().home();
         BlockPos homePos = home != null && home.dimension() == bot.level().dimension() ? home.pos() : null;
         double homeDistance = homePos == null ? 0 : Math.sqrt(bot.blockPosition().distSqr(homePos));
-        boolean homeward = homePos != null && homeDistance > HOME_RANGE && bot.journey() == null; // (on a journey it is far away on purpose)
+        boolean homeward = homePos != null && homeDistance > HOME_RANGE && bot.journey() == null
+            && !GreatBuildTask.isAway(bot); // (on a journey, at the Great Build: far away on purpose)
         net.minecraft.server.level.ServerLevel level = bot.level();
         // Land: animals, trees and ore aren't out at sea. Where it can see, it skips water; where it
         // can't (not loaded), it may be land; open water only if nothing else turns up
