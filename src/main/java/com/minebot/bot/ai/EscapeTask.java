@@ -193,8 +193,19 @@ public class EscapeTask extends Task {
     public static boolean underground(BotPlayer bot) {
         ServerLevel level = bot.level();
         BlockPos feet = bot.blockPosition();
-        return !level.canSeeSky(feet.above())
-            && feet.getY() < level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, feet.getX(), feet.getZ()) - DEPTH;
+        int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, feet.getX(), feet.getZ());
+        if (level.canSeeSky(feet.above()) || feet.getY() >= top - DEPTH) {
+            return false;
+        }
+        // Rock or earth over its head, not a roof: in a tall house (a roof well over it) it was "underground", and sent out of
+        // its bedroom to the surface every few seconds (Deepslate)
+        for (int y = feet.getY() + 2; y < top; y++) {
+            if (com.minebot.bot.world.BlockRules.isNaturalTerrain(level.getBlockState(new BlockPos(feet.getX(), y, feet.getZ())))
+                && !level.getBlockState(new BlockPos(feet.getX(), y, feet.getZ())).canBeReplaced()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
