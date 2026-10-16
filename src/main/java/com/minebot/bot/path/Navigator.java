@@ -30,7 +30,7 @@ public class Navigator {
     private static final int NODES_PER_TICK = 1500;
     private static final int MAX_NODES = 30_000;
     /** All bots' searches together, per tick (server thread only). */
-    private static final int NODES_ALL_BOTS = 5000;
+    private static final int NODES_ALL_BOTS = 4000; // (5000: half the tick in sessions, fifteen bots looking for ways round the site and its mine)
     private static final int MIN_NODES_PER_TICK = 300;
     private static int budgetTick = -1;
     private static int searchersThisTick;

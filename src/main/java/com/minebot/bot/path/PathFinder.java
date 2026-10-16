@@ -282,7 +282,20 @@ public class PathFinder {
     }
 
     /** A door or gate right beside (a level up or down too). */
+    /** nearDoor answers for this search (27 blocks looked at each time, for every block a way might put one in). */
+    private final it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap doorNear = new it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap();
+
     private boolean nearDoor(int x, int y, int z) {
+        long key = BlockPos.asLong(x, y, z);
+        if (doorNear.containsKey(key)) {
+            return doorNear.get(key);
+        }
+        boolean near = nearDoorUncached(x, y, z);
+        doorNear.put(key, near);
+        return near;
+    }
+
+    private boolean nearDoorUncached(int x, int y, int z) {
         for (int dy = -1; dy <= 1; dy++) {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
