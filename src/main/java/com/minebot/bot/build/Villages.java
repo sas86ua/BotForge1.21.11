@@ -101,7 +101,9 @@ public final class Villages extends SavedData {
 
     /** A project's plan (of the building's own wood; no bed in it: nobody moves in). */
     public static HousePlan plan(Project project) {
-        return PLANS.computeIfAbsent(project, p -> new SchematicHouse(buildings().get(p.building()), p.origin(), p.front(), 0, false));
+        // (in oak, which grows nearly everywhere - not the plan's own acacia or dark oak, none of it round some villages: they looked
+        // for acacia logs for the church for days; what went in of the plan's wood counts as built, see SchematicHouse#isDone)
+        return PLANS.computeIfAbsent(project, p -> new SchematicHouse(buildings().get(p.building()), p.origin(), p.front(), 1, false));
     }
 
     public static String name(int building) {
