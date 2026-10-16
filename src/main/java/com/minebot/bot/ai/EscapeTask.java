@@ -288,6 +288,14 @@ public class EscapeTask extends Task {
 
     @Override
     public Status tick() {
+        Status status = run();
+        if (status == Status.SUCCESS) {
+            TRAPPED.remove(bot.getUUID()); // (out: no more "trapped" for the rest of the 90 s - it started and ended again and again)
+        }
+        return status;
+    }
+
+    private Status run() {
         if (ticks == 0 && !boxed && !sealed && boxedIn(bot)) {
             boxed = true;
         }
