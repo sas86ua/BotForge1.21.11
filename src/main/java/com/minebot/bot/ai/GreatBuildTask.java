@@ -79,6 +79,8 @@ public class GreatBuildTask extends Task {
     private boolean toolPacked;
     private boolean campPacked;
     private boolean campfirePacked;
+    private boolean toolsPacked;
+    private boolean logsPacked;
     private boolean bagEmptied;
     private boolean campDone;
     private boolean campfireDone;
@@ -559,6 +561,20 @@ public class GreatBuildTask extends Task {
                 && build.campFurnaces(bot).size() < GreatBuild.campFurnaceCount(bot)) { // (a camp to set up still)
                 campfirePacked = true;
                 child = new ObtainTask(bot, Target.of(Items.CAMPFIRE, 1), 0);
+                return Status.RUNNING;
+            }
+            if (!toolsPacked) {
+                // A crafting table and some logs along: the site has no trees left round it, and with none in the bag it tried to
+                // make a table there every second, every kind of wood failing (Tuff)
+                toolsPacked = true;
+                if (Inv.count(bot, stack -> stack.is(Items.CRAFTING_TABLE)) == 0) {
+                    child = new ObtainTask(bot, Target.of(Items.CRAFTING_TABLE, 1), 0);
+                    return Status.RUNNING;
+                }
+            }
+            if (!logsPacked && Inv.count(bot, stack -> stack.is(net.minecraft.tags.ItemTags.LOGS)) < 8) {
+                logsPacked = true;
+                child = new ObtainTask(bot, Target.tag(net.minecraft.tags.ItemTags.LOGS, 8), 0);
                 return Status.RUNNING;
             }
             if (!bagEmptied && !bot.memory().chests().isEmpty() && !Stash.toStore(bot).isEmpty()) {
