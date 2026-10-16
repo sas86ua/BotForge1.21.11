@@ -79,7 +79,7 @@ public class FoodTask extends Task {
         }
         int cooked = Inv.count(bot, Food::isCooked);
         if (!cook) {
-            if (Inv.count(bot, Inv::isFood) >= stock) {
+            if (Inv.count(bot, Food::isProperFood) >= stock) { // (rotten flesh it won't eat is no stock: hungry, it went without, the task done at once)
                 return Status.SUCCESS;
             }
         } else if (cooked >= stock) {
@@ -90,7 +90,7 @@ public class FoodTask extends Task {
         if (!checkedChests && useChests) {
             // First see if there's food in chests nearby (own, other bots', villages'...)
             checkedChests = true;
-            Target ready = cook ? new Target("cooked food", Food::isCooked, stock) : new Target("any food", Inv::isFood, stock);
+            Target ready = cook ? new Target("cooked food", Food::isCooked, stock) : new Target("any food", Food::isProperFood, stock);
             Target rawMeat = new Target("raw meat", this::isCookable, raw + 4);
             if (ChestTask.stored(bot, ready) > 0) {
                 child = ChestTask.withdraw(bot, ready);

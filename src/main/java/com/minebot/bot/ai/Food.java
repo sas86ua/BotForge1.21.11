@@ -58,6 +58,11 @@ public final class Food {
     }
 
     /** Inventory slot of the best food to eat now, or -1. */
+    /** Food it eats without being desperate (not rotten flesh, spider eyes...). */
+    public static boolean isProperFood(net.minecraft.world.item.ItemStack stack) {
+        return Inv.isFood(stack) && !DESPERATE.contains(stack.getItem());
+    }
+
     public static int pickFood(BotPlayer bot) {
         boolean starving = isStarving(bot);
         return IntStream.range(0, Inv.MAIN_SIZE)
