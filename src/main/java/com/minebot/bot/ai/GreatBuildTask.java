@@ -743,7 +743,7 @@ public class GreatBuildTask extends Task {
     private @Nullable Status setUpCamp(GreatBuild build) {
         ServerLevel level = bot.level();
         BlockPos centre = build.campCentre(bot);
-        if (centre == null || campTries > 6) {
+        if (centre == null || campTries > 10) {
             campDone = true;
             return null;
         }

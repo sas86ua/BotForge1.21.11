@@ -1471,7 +1471,7 @@ public final class GreatBuild extends SavedData {
     private static final int CAMP_OFFSET = 7;
     private static final int CAMP_SPACING = 16;
     /** A camp's furnaces round its camp fire (a block's gap between): left, right, then behind. */
-    private static final int[][] CAMP_FURNACES = {{-2, 0}, {2, 0}, {0, -2}};
+    private static final int[][] CAMP_FURNACES = {{-2, 0}, {2, 0}, {0, -2}, {-2, -2}, {2, -2}, {-2, 2}, {2, 2}};
 
     /** This bot's camp fire by the site (a spot of its own round the site, kept from then on), or null. */
     public @Nullable BlockPos campCentre(BotPlayer bot) {
@@ -1685,7 +1685,8 @@ public final class GreatBuild extends SavedData {
 
     /** How many furnaces this bot keeps at its camp: 2 or 3 (its own way). */
     public static int campFurnaceCount(BotPlayer bot) {
-        return 2 + (bot.getUUID().hashCode() & 1);
+        // (two or three were too few: 320 stone for stone bricks took most of an hour on them - the bots stood by their fires)
+        return 5 + (bot.getUUID().hashCode() & 1);
     }
 
     // ---- materials ------------------------------------------------------------------------------
