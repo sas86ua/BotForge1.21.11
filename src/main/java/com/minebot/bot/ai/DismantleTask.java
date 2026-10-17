@@ -28,6 +28,8 @@ public class DismantleTask extends Task {
     private @Nullable BlockPos current;
     private @Nullable Task collect;
     private int failures;
+    /** Where it has broken a block already: one put back there is no pickup's way up (see tick). */
+    private final java.util.Set<BlockPos> broken = new java.util.HashSet<>();
 
     public DismantleTask(BotPlayer bot) {
         this(bot, bot.pillars());
@@ -199,7 +201,9 @@ public class DismantleTask extends Task {
         BlockPos done = current;
         blocks.remove(done);
         current = null;
-        if (result == BlockBreaker.Result.SUCCESS) {
+        // (the drop lay two blocks up; the way to it put a block down to climb on, which was a pillar to take down, and
+        // so round for six minutes - Steve, Makena: the second time at one spot, it's left lying)
+        if (result == BlockBreaker.Result.SUCCESS && broken.add(done)) {
             collect = new CollectItemsTask(bot, Vec3.atCenterOf(done), 3.0, 40);
         }
         return Status.RUNNING;

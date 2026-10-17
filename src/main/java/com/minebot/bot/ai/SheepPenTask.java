@@ -526,7 +526,10 @@ public class SheepPenTask extends Task {
                 }
                 // (a block of cobblestone or dirt left lying in it - a step put down on some way: it goes, built or not; the
                 // sheep climbed it and out over the fence)
-                boolean stray = Inv.isScaffold(new ItemStack(state.getBlock().asItem())) && !ProtectedAreas.isProtected(level, clear);
+                // (and a flower or a sapling growing where the fence goes: it was left out, and the pen stood with gaps in it - Calcite's)
+                boolean stray = (Inv.isScaffold(new ItemStack(state.getBlock().asItem())) || state.is(BlockTags.FLOWERS)
+                    || state.is(BlockTags.SAPLINGS))
+                    && !ProtectedAreas.isProtected(level, clear);
                 if (!stray && (!BlockRules.canBreak(level, clear, state) || BlockRules.isBuilt(state))) {
                     skipped.add(clear);
                     continue;

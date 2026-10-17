@@ -129,8 +129,8 @@ public class GatherTask extends Task {
                 }
             }
             current = findNext();
-            if (current == null && source == Sources.LOGS && !surfaced && EscapeTask.underground(bot)) {
-                surfaced = true; // (no trees grow down here: up to the surface to look)
+            if (current == null && (source == Sources.LOGS || source == Sources.FLOWERS) && !surfaced && EscapeTask.underground(bot)) {
+                surfaced = true; // (no trees or flowers grow down here: up to the surface to look - Zola sought poppies in a cave at -25)
                 bot.debug("no trees underground; going up to the surface");
                 child = new GoToTask(bot, Goal.surface(bot.level()));
                 return Status.RUNNING;

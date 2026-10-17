@@ -177,6 +177,7 @@ public class BotCombat {
     private float targetHealth;
     private int unharmedTicks;
     private static final int UNHARMED_TICKS = 20 * 10;
+    private static final int UNHARMED_FAR_TICKS = 20 * 40;
 
     /**
      * One that won't be harmed (a zombie stuck half in the air, out of step with the world: eleven bots stood round it
@@ -192,7 +193,10 @@ public class BotCombat {
             return;
         }
         targetHealth = Math.min(targetHealth, enemy.getHealth());
-        if (bot.distanceTo(enemy) < 4.0 && ++unharmedTicks > UNHARMED_TICKS) {
+        // (further off too, over a longer while: a creeper behind the wall of its shaft, seven blocks away, a charged crossbow
+        // aimed at it and never shot - Copper "fought" it a quarter of an hour, all else at a standstill)
+        boolean close = bot.distanceTo(enemy) < 4.0;
+        if (++unharmedTicks > (close ? UNHARMED_TICKS : UNHARMED_FAR_TICKS)) {
             bot.debug("{} takes no harm; leaving it", enemy.getName().getString());
             ignoredUntil.put(enemy.getUUID(), now() + 20L * 60 * 5); // (five minutes: no use coming back to it soon)
             if (enemy == aggressor) {

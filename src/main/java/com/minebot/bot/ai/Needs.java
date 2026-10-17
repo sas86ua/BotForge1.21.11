@@ -71,7 +71,8 @@ public final class Needs {
         new Need("loot", LootTask::wanted, LootTask::new),
         // Ready gear in a chest at home, better than its own (or missing: just died and started over):
         // armour, a bow or crossbow, pickaxe, axe, shovel, sword, shield. Taken out before crafting anything new
-        new Need("stored gear", bot -> !GreatBuildTask.isAway(bot) && bot.every("stored gear", 20 * 60 * 5, () -> BrowseChestsTask.storedUpgrade(bot) != null),
+        // (at home only: out on a journey 200 blocks off, Calcite turned back for a look in its chest, and on again)
+        new Need("stored gear", bot -> !GreatBuildTask.isAway(bot) && Home.isNear(bot, 64) && bot.every("stored gear", 20 * 60 * 5, () -> BrowseChestsTask.storedUpgrade(bot) != null),
             bot -> new BrowseChestsTask(bot, BrowseChestsTask.storedUpgrade(bot))), // (none any more: fails right away)
         obtain("pickaxe", bot -> !Tools.has(bot, ItemTags.PICKAXES, Tools.Tier.ANY),
             bot -> Tools.target(ItemTags.PICKAXES, Tools.Tier.ANY)),
