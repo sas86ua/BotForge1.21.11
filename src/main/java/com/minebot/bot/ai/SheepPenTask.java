@@ -75,6 +75,7 @@ public class SheepPenTask extends Task {
     private static final int WOOL_KEEP = 16;
     private static final int CHECK_TICKS = 20 * 60 * 3;
     private static final int MAX_TICKS = 20 * 60 * 6;
+    private static final int STILL_TICKS = 20 * 45;
     private static final int TICKS_PER_BLOCK = 20 * 15;
     private static final int LURE_TICKS = 20 * 120;
     private static final long DAY = 24000L;
@@ -88,6 +89,9 @@ public class SheepPenTask extends Task {
     private @Nullable Job job;
     private @Nullable Task child;
     private int ticks;
+    /** Where it stood a while ago, and how long since (it stood still by its gate three minutes on end - Lapis, Copper). */
+    private @Nullable Vec3 stillAt;
+    private int stillTicks;
     private final Set<BlockPos> skipped = new HashSet<>();
     private @Nullable BlockPos working;
     private int workingTicks;
@@ -398,6 +402,18 @@ public class SheepPenTask extends Task {
         }
         if (++ticks > MAX_TICKS) {
             bot.debug("sheep pen: {} took too long", job.name().toLowerCase());
+            return finish(Status.FAILURE, CHECK_TICKS);
+        }
+        if (stillAt == null || job == Job.BUILD || bot.position().distanceTo(stillAt) > 1.0) {
+            stillAt = bot.position();
+            stillTicks = 0;
+        } else if (++stillTicks > STILL_TICKS) {
+            bot.debug("sheep pen: {} - not a step in {} s; later", job.name().toLowerCase(), STILL_TICKS / 20);
+            stillAt = null;
+            if (!isInside() && !inGateway() && bot.memory().penGate() != null && gateOpen()
+                && bot.position().distanceTo(Vec3.atCenterOf(bot.memory().penGate())) < 4) {
+                useGate(); // (not left open)
+            }
             return finish(Status.FAILURE, CHECK_TICKS);
         }
         return switch (job) {
@@ -724,6 +740,14 @@ public class SheepPenTask extends Task {
         boolean atGate = inGateway() || bot.blockPosition().equals(from)
             || bot.position().distanceTo(Vec3.atBottomCenterOf(from)) < 0.8;
         if (!atGate) {
+            BlockPos head = bot.blockPosition().above(2);
+            if (bot.position().distanceTo(Vec3.atBottomCenterOf(from)) < 2.5 && from.getY() - bot.getBlockY() == 1 && steady()
+                && bot.level().getBlockState(head).getCollisionShape(bot.level(), head).isEmpty()) {
+                // (in a dip a block down beside the way in: the way took it there, and it stood in the dip - Lapis)
+                bot.navigator().stop();
+                bot.controller().moveTowards(Vec3.atBottomCenterOf(from), false, true);
+                return false;
+            }
             if (bot.position().distanceTo(Vec3.atBottomCenterOf(from)) < 2.5 && bot.getBlockY() == from.getY()) { // (a step up or down to it: the way, not straight - Sunny pushed at the bank under her gate)
                 // (a step off: the path "reached" at once, 0.7 from the middle, and it stood there for good - Zealot at its gate)
                 bot.navigator().stop();

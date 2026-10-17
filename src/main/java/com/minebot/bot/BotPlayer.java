@@ -524,7 +524,15 @@ public class BotPlayer extends ServerPlayer {
             // (no air anywhere near: a flooded cave; the "escape" need breaks out through the rock)
         } else if (!isDeadOrDying() && tickCount >= aiPausedUntil) {
             try {
-                boolean fighting = combat.tick();
+                boolean fighting;
+                try {
+                    fighting = combat.tick();
+                } catch (RuntimeException e) {
+                    // (a NullPointerException after a fight, its stack left out by the JVM: which half it's in)
+                    debug("ERROR in combat while {}: {}", brain.describe(), e.toString());
+                    combat.reset();
+                    fighting = false;
+                }
                 if (fighting && !wasFighting) {
                     brain.pause();
                 }

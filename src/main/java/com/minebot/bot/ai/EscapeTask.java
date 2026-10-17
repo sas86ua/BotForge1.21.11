@@ -212,7 +212,10 @@ public class EscapeTask extends Task {
             var home = bot.memory().home();
             BlockPos to = home != null && home.dimension() == bot.level().dimension() ? home.pos() : bot.memory().anchor().pos();
             bot.debug("stranded here; finding a way off, a longer jump down if need be");
-            bot.navigator().navigateEscape(Goal.column(to.getX(), to.getZ(), 16));
+            // (to its very door when it's near home already: "within 16 of home" was there at once, and it sat on in a pit two
+            // blocks deep thirteen blocks from its house - Quartz)
+            double radius = Math.sqrt(bot.blockPosition().distToLowCornerSqr(to.getX(), bot.getBlockY(), to.getZ())) > 24 ? 16 : 2;
+            bot.navigator().navigateEscape(Goal.column(to.getX(), to.getZ(), radius));
         }
         if (!bot.blockPosition().closerThan(strandedFrom, 8)) {
             bot.navigator().stop();
