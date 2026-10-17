@@ -65,6 +65,8 @@ public class GatherTask extends Task {
     private int recycles;
     /** Down a mine wanting logs: it has been up to the surface to look for trees. */
     private boolean surfaced;
+    /** A full bag near home: it has been to the chests with it. */
+    private boolean stored;
     private static final int MAX_RECYCLES = 150;
 
     public GatherTask(BotPlayer bot, Sources.Mine source, Target target) {
@@ -114,6 +116,17 @@ public class GatherTask extends Task {
         if (current == null) {
             if (!Home.isNear(bot, 48)) {
                 Stash.makeRoom(bot, 2); // (out there with a full bag, what it digs would be left lying)
+            } else if (Inv.freeSlots(bot) == 0) {
+                // (near home too: it felled trees with a full bag and the logs lay where they fell - 278 of them about the houses)
+                if (!stored && !bot.memory().chests().isEmpty()) {
+                    stored = true;
+                    child = new StoreTask(bot);
+                    return Status.RUNNING;
+                }
+                if (!Stash.makeRoom(bot, 1)) {
+                    bot.debug("no room in the bag for {}", source.name());
+                    return Status.FAILURE;
+                }
             }
             current = findNext();
             if (current == null && source == Sources.LOGS && !surfaced && EscapeTask.underground(bot)) {
