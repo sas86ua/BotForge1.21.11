@@ -179,7 +179,7 @@ public class CraftTask extends Task {
         return bot.getInventory().countItem(Items.CRAFTING_TABLE) > 0 || findTable(bot) != null;
     }
 
-    private static @Nullable BlockPos findTable(BotPlayer bot) {
+    public static @Nullable BlockPos findTable(BotPlayer bot) {
         ServerLevel level = bot.level();
         BlockPos home = bot.memory().craftingTable();
         if (home != null && level.dimension() == bot.memory().homeDimension()

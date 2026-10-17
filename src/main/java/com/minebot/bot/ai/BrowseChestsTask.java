@@ -62,6 +62,19 @@ public class BrowseChestsTask extends Task {
     private static final java.util.Map<java.util.UUID, java.util.Map<BlockPos, Long>> GEAR_TRIED = new java.util.concurrent.ConcurrentHashMap<>();
     private static final long GEAR_RETRY = 24000L;
 
+    /** The chest the need last found (handed to the task: looking again, it found none - "stored gear" finishing at once a
+     * hundred times an hour). */
+    private static final java.util.Map<java.util.UUID, BlockPos> FOUND = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The chest the need found, if it's still worth a look; else a fresh look round. */
+    public static @Nullable BlockPos foundUpgrade(BotPlayer bot) {
+        BlockPos found = FOUND.remove(bot.getUUID());
+        if (found != null && GEAR_TRIED.getOrDefault(bot.getUUID(), java.util.Map.of()).getOrDefault(found, 0L) <= bot.level().getGameTime()) {
+            return found;
+        }
+        return storedUpgrade(bot);
+    }
+
     public static @Nullable BlockPos storedUpgrade(BotPlayer bot) {
         for (RandomizableContainerBlockEntity container : ChestTask.reachable(bot)) {
             if (GEAR_TRIED.getOrDefault(bot.getUUID(), java.util.Map.of()).getOrDefault(container.getBlockPos(), 0L) > bot.level().getGameTime()) {
@@ -69,6 +82,7 @@ public class BrowseChestsTask extends Task {
             }
             for (int i = 0; i < container.getContainerSize(); i++) {
                 if (isGearUpgrade(bot, container.getItem(i))) {
+                    FOUND.put(bot.getUUID(), container.getBlockPos().immutable());
                     return container.getBlockPos();
                 }
             }

@@ -300,8 +300,19 @@ public class Planner {
         return false;
     }
 
+    /** A crafting table standing near (a village's, another bot's, the one at the Great Build's camp): looked for once a plan. */
+    private @Nullable Boolean tableNear;
+
     private boolean hasTableAccess() {
-        return bot.memory().craftingTable() != null || bot.getInventory().countItem(Items.CRAFTING_TABLE) > 0;
+        // (one standing near counts as well, as it does for the crafting itself: at the Great Build, no trees for planks, the plan
+        // for a pickaxe found no way to a table of its own and gave up, a table or two standing by - Quartz without a pickaxe)
+        if (bot.memory().craftingTable() != null || bot.getInventory().countItem(Items.CRAFTING_TABLE) > 0) {
+            return true;
+        }
+        if (tableNear == null) {
+            tableNear = com.minebot.bot.ai.CraftTask.findTable(bot) != null;
+        }
+        return tableNear;
     }
 
     /** Is there a block of this source (that the target accepts) in the loaded area nearby? */
