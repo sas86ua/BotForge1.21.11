@@ -512,6 +512,16 @@ public class Navigator {
     private void execute(BlockPos from, Path.Step step) {
         BlockPos to = step.pos();
         Vec3 center = Vec3.atBottomCenterOf(to);
+        BlockPos under = from.below();
+        var underShape = bot.level().getBlockState(under).getCollisionShape(bot.level(), under);
+        if (bot.getY() < from.getY() - 0.3 && bot.onGround() && step.move() != Move.PILLAR
+            && !underShape.isEmpty() && under.getY() + underShape.max(net.minecraft.core.Direction.Axis.Y) > bot.getY() + 0.3 // (in it, below its rim: not on a slab)
+            && Math.abs(bot.getX() - (from.getX() + 0.5)) < 0.6 && Math.abs(bot.getZ() - (from.getZ() + 0.5)) < 0.6) {
+            // Still down in the hollow its way starts above (a cauldron's): a jump up over the rim first - walking, it pushed
+            // at the rim for good (Deepslate, shut in a cauldron at the Great Build, starving)
+            move(center, true);
+            return;
+        }
         switch (step.move()) {
             case WALK, DIAGONAL, BRIDGE -> {
                 if (clear(List.of(to, to.above()))) {
