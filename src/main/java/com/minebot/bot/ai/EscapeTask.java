@@ -274,7 +274,7 @@ public class EscapeTask extends Task {
                     return null;
                 }
                 BlockState state = level.getBlockState(next);
-                if (BlockRules.isOpenable(state)) {
+                if (BlockRules.isOpenable(state, next)) {
                     return null; // (a door or gate: a way out, whatever the paths say)
                 }
                 if (state.getCollisionShape(level, next).isEmpty()) {

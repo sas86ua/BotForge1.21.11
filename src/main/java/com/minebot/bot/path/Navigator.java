@@ -229,6 +229,11 @@ public class Navigator {
         if (bot.onGround() && onTop && BlockRules.isStandable(bot.level(), feet, state)) {
             return feet.above();
         }
+        if (!onTop && bot.getY() - feet.getY() > 0.05 && BlockRules.isPassable(bot.level(), feet.above(), bot.level().getBlockState(feet.above()))) {
+            // Down in the hollow of a cauldron (a composter, a hopper): its way starts from the rim, a jump up out of it - from
+            // "inside the block" there was no way anywhere, and it stood in the cauldron for good
+            return feet.above();
+        }
         if (!onTop) {
             // Beside a fence post, not on it: its middle over the corner of the post's block (Zealot, squeezed into the
             // corner of his sheep pen; its ways all set off from outside the fence, through it). The open block it's in
@@ -888,11 +893,12 @@ public class Navigator {
                 continue;
             }
             bot.controller().releaseInputs();
-            if (BlockRules.isOpenable(state)) {
+            if (BlockRules.isOpenable(state, pos)) {
                 if (!isOpen(state)) {
                     openDoor(pos);
-                    if (state.is(net.minecraft.tags.BlockTags.FENCE_GATES)) {
-                        openedGate = pos.immutable(); // (shut behind it: a pen's sheep would get out)
+                    if (state.is(net.minecraft.tags.BlockTags.FENCE_GATES) || BlockRules.isIronDoor(state)) {
+                        // (shut behind it: a pen's sheep would get out; an iron door is left as it was built, shut)
+                        openedGate = pos.immutable();
                     }
                     return true;
                 }
@@ -923,7 +929,8 @@ public class Navigator {
             return;
         }
         double distance = bot.position().distanceTo(Vec3.atBottomCenterOf(gate));
-        if (distance > 6 || !bot.level().getBlockState(gate).is(net.minecraft.tags.BlockTags.FENCE_GATES)) {
+        BlockState gateState = bot.level().getBlockState(gate);
+        if (distance > 6 || !gateState.is(net.minecraft.tags.BlockTags.FENCE_GATES) && !BlockRules.isIronDoor(gateState)) {
             openedGate = null;
             return;
         }
@@ -945,6 +952,13 @@ public class Navigator {
     private void openDoor(BlockPos pos) {
         Vec3 hit = Vec3.atCenterOf(pos);
         bot.controller().lookAt(hit);
+        BlockState state = bot.level().getBlockState(pos);
+        if (BlockRules.isIronDoor(state) && state.getBlock() instanceof DoorBlock door) {
+            // (no hand opens one: as if it pressed the button the plan has yet to get - on the Great Build's site only)
+            door.setOpen(bot, bot.level(), state, pos, !isOpen(state));
+            bot.swing(InteractionHand.MAIN_HAND);
+            return;
+        }
         bot.gameMode.useItemOn(bot, bot.level(), bot.getMainHandItem(), InteractionHand.MAIN_HAND,
             new BlockHitResult(hit, Direction.UP, pos, false));
         bot.swing(InteractionHand.MAIN_HAND);

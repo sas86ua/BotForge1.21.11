@@ -49,12 +49,25 @@ public final class BlockRules {
         return state.is(BlockTags.WOODEN_DOORS) || state.is(BlockTags.FENCE_GATES);
     }
 
+    /**
+     * Opened by a bot here: wooden doors and gates anywhere, and iron doors on the Great Build's site - no button or plate
+     * wired to them while it's built, and the bots that worked in those rooms were shut in. Elsewhere an iron door is
+     * someone's lock, and stays one.
+     */
+    public static boolean isOpenable(BlockState state, BlockPos pos) {
+        return isOpenable(state) || isIronDoor(state) && com.minebot.bot.build.GreatBuild.nearSite(pos);
+    }
+
+    public static boolean isIronDoor(BlockState state) {
+        return state.is(Blocks.IRON_DOOR);
+    }
+
     /** The bot's body can occupy this block (air, plants, water, carpet...). */
     public static boolean isPassable(BlockGetter level, BlockPos pos, BlockState state) {
         if (isDangerous(state)) {
             return false;
         }
-        if (isOpenable(state) && state.hasProperty(BlockStateProperties.OPEN) && state.getValue(BlockStateProperties.OPEN)) {
+        if ((isOpenable(state) || isIronDoor(state)) && state.hasProperty(BlockStateProperties.OPEN) && state.getValue(BlockStateProperties.OPEN)) {
             return true; // an open door is just a thin panel at the side
         }
         if (isClimbable(state) && !state.is(Blocks.SCAFFOLDING)) {

@@ -539,7 +539,7 @@ public class PathFinder {
         if (passable(x, y, z, state)) {
             return 0;
         }
-        if (BlockRules.isOpenable(state)) {
+        if (BlockRules.isOpenable(state) || BlockRules.isIronDoor(state) && BlockRules.isOpenable(state, new BlockPos(x, y, z))) {
             return DOOR;
         }
         if (!options.canBreak() || !canBreak(x, y, z, state)) {
