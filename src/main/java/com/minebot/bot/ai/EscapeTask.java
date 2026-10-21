@@ -254,6 +254,11 @@ public class EscapeTask extends Task {
      * space); null if there is a way out - or no telling.
      */
     private static @org.jetbrains.annotations.Nullable java.util.Set<BlockPos> enclosure(BotPlayer bot) {
+        return enclosure(bot, true);
+    }
+
+    /** @param doorsOut a door or gate counts as a way out (not when the ways have shown it can't get to it) */
+    private static @org.jetbrains.annotations.Nullable java.util.Set<BlockPos> enclosure(BotPlayer bot, boolean doorsOut) {
         ServerLevel level = bot.level();
         java.util.Set<BlockPos> seen = new java.util.HashSet<>();
         java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
@@ -274,7 +279,7 @@ public class EscapeTask extends Task {
                     return null;
                 }
                 BlockState state = level.getBlockState(next);
-                if (BlockRules.isOpenable(state, next)) {
+                if (doorsOut && BlockRules.isOpenable(state, next)) {
                     return null; // (a door or gate: a way out, whatever the paths say)
                 }
                 if (state.getCollisionShape(level, next).isEmpty()) {
@@ -353,6 +358,16 @@ public class EscapeTask extends Task {
         }
         if (boxed) {
             return unbox();
+        }
+        if (ticks == 0 && !strandedMode && !sealed && !underground(bot) && bot.navigator().boxedIn(30)) {
+            // (its ways find a handful of cells and no more, a door beyond a crafting table it can't climb past under the lintel:
+            // "a door, so a way out" - and Zola stood in her back room for hours, missing the Great Build. Shut in, then)
+            java.util.Set<BlockPos> inside = enclosure(bot, false);
+            if (inside != null) {
+                planSealRoute(inside);
+                sealed = sealRoute != null;
+                bot.debug("boxed in with {} cells to move about, a door out of reach; {}", inside.size(), sealed ? "breaking out" : "no way to break out");
+            }
         }
         if (ticks == 0 && !strandedMode && !sealed && stranded(bot) && enclosure(bot) == null) {
             strandedMode = true;

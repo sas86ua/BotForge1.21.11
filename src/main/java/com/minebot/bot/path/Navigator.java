@@ -203,6 +203,15 @@ public class Navigator {
         status = Status.IDLE;
     }
 
+    private int lastExpanded = Integer.MAX_VALUE;
+    private boolean lastComplete = true;
+    private long lastSearchAt = Long.MIN_VALUE / 4;
+
+    /** Its last searches found only a handful of cells and no way: boxed in, whatever lies beyond (a door it can't get to). */
+    public boolean boxedIn(int maxCells) {
+        return !lastComplete && lastExpanded <= maxCells && bot.level().getGameTime() - lastSearchAt < 20 * 30;
+    }
+
     public Status status() {
         return status;
     }
@@ -292,6 +301,9 @@ public class Navigator {
                 return status;
             }
             path = search.result();
+            lastExpanded = search.expanded();
+            lastComplete = path != null && path.complete();
+            lastSearchAt = bot.level().getGameTime();
             bot.debug("path {} nodes, {} steps, complete={}, goal {}", search.expanded(), path == null ? 0 : path.size(),
                 path != null && path.complete(), goal);
             search = null;

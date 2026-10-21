@@ -553,9 +553,16 @@ public class FurnishTask extends Task {
             return true; // (a way a block wide between two walls: the only way through, Steve walled himself in behind his furnace)
         }
         for (Direction direction : Direction.Plane.HORIZONTAL) {
-            BlockState beside = level.getBlockState(pos.relative(direction));
+            BlockPos side = pos.relative(direction);
+            BlockState beside = level.getBlockState(side);
             if (beside.is(BlockTags.DOORS) || beside.is(BlockTags.FENCE_GATES)) {
                 return true; // (a gate between rooms too)
+            }
+            if (!isWall(level, side) && inPassage(level, side) && (direction.getAxis() == Direction.Axis.Z
+                ? isWall(level, side.east()) && isWall(level, side.west()) : isWall(level, side.north()) && isWall(level, side.south()))) {
+                // (in front of a doorway with no door in it, between two rooms: a crafting table there and the back room's way out
+                // was a climb onto it under the lintel - Zola shut in her back room for hours)
+                return true;
             }
             BlockState twoAway = level.getBlockState(pos.relative(direction, 2));
             if (twoAway.is(BlockTags.DOORS) && twoAway.hasProperty(DoorBlock.FACING)
