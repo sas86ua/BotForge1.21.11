@@ -391,8 +391,32 @@ public class EscapeTask extends Task {
                 sealed = sealRoute != null;
                 bot.debug("boxed in with {} cells to move about, a door out of reach; {}", inside.size(), sealed ? "breaking out" : "no way to break out");
             }
+            if (!sealed) {
+                // (a hole in the walls it can't use - out of it on top of a chest, the lintel at its head - or none to break: it
+                // cuts its way along, away from home, through whatever it may break - Zola again, the hole she broke no use to her)
+                hewing = bot.blockPosition();
+                bot.debug("boxed in, no way out by the ways; cutting my way out");
+            }
         }
-        if (ticks == 0 && !strandedMode && !sealed && stranded(bot) && enclosure(bot) == null) {
+        if (hewing != null) {
+            if (!bot.blockPosition().closerThan(hewing, 5)) {
+                bot.debug("cut my way out");
+                bot.clearNavFailures();
+                return Status.SUCCESS;
+            }
+            if (++ticks > MAX_TICKS) {
+                return Status.FAILURE;
+            }
+            if (breaker.target() != null && breaker.tick() == BlockBreaker.Result.RUNNING) {
+                return Status.RUNNING;
+            }
+            if (away == null && (bot.memory().home() == null || bot.memory().home().dimension() != bot.level().dimension())) {
+                away = Direction.Plane.HORIZONTAL.getRandomDirection(bot.getRandom());
+            }
+            tunnelTicks = Math.max(tunnelTicks, 2); // (along, not up: digOut's way by home)
+            return digOut();
+        }
+        if (ticks == 0 && !strandedMode && !sealed && hewing == null && stranded(bot) && enclosure(bot) == null) {
             strandedMode = true;
         }
         if (strandedMode) {
@@ -458,6 +482,8 @@ public class EscapeTask extends Task {
     }
 
     private boolean digOut;
+    /** Boxed in where it can't use what openings there are: cutting its way out, from here. */
+    private @org.jetbrains.annotations.Nullable BlockPos hewing;
     /** Ticks left of a way along before going up again (when up was barred). */
     private int tunnelTicks;
     private @org.jetbrains.annotations.Nullable BlockPos start;
