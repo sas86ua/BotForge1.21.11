@@ -324,10 +324,33 @@ public class EscapeTask extends Task {
     /** Breaks out through the wall along the planned way (walls too: it is its own house it is shut in), then walks out. */
     private Status breakOut() {
         ServerLevel level = bot.level();
-        for (BlockPos pos : sealRoute) {
+        BlockPos lastOpen = null;
+        for (int k = 0; k < sealRoute.size(); k++) {
+            BlockPos pos = sealRoute.get(k);
+            if (k % 2 == 0 && isOpen(level, pos) && isOpen(level, sealRoute.get(k + 1))) {
+                lastOpen = pos; // (feet and head both clear: a cell along the way it can stand in)
+            }
             if (!isOpen(level, pos)) {
+                if (!bot.isWithinBlockInteractionRange(pos, 0.0) && lastOpen != null) {
+                    // (a wall two thick: the next block out of reach from where it stands - along the way broken so far first;
+                    // it stood breaking at nothing, Zola)
+                    breaker.cancel();
+                    bot.controller().moveTowards(Vec3.atBottomCenterOf(lastOpen), false, false);
+                    return Status.RUNNING;
+                }
                 bot.controller().lookAt(Vec3.atCenterOf(pos));
                 breaker.start(pos);
+                return Status.RUNNING;
+            }
+        }
+        if (bot.getY() - bot.getBlockY() > 0.1 && bot.blockPosition().closerThan(sealRoute.get(0), 2.0)) {
+            // Standing up on something (a chest): its head is a block higher than the way's - the lintel over the hole too
+            // (Zola, up on her chest, pushed at the plank over the hole she had broken)
+            BlockPos top = sealRoute.get(0).above(2);
+            BlockState state = level.getBlockState(top);
+            if (!isOpen(level, top) && !state.hasBlockEntity() && state.getDestroySpeed(level, top) >= 0 && !ProtectedAreas.isProtected(level, top)) {
+                bot.controller().lookAt(Vec3.atCenterOf(top));
+                breaker.start(top);
                 return Status.RUNNING;
             }
         }
