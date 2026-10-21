@@ -619,7 +619,7 @@ public final class GreatBuild extends SavedData {
             entry[0] = Math.min(entry[0], index / size);
             entry[1]++;
         }
-        StringBuilder text = new StringBuilder(bot.getPlainTextName() + ": building layers " + lowest + ".." + (Math.max(lowest, lowestBusyLayer) + UP_LAYERS)
+        StringBuilder text = new StringBuilder(bot.getPlainTextName() + ": building layers " + lowest + ".." + windowTop(lowest)
             + " (the lowest unfinished one is " + lowest + ", height " + (origin.getY() + lowest) + ")");
         boolean any = false;
         for (Map.Entry<Item, int[]> entry : new java.util.TreeMap<Item, int[]>(java.util.Comparator.comparing(GreatBuild::key)) {{
@@ -634,7 +634,7 @@ public final class GreatBuild extends SavedData {
             int layer = entry.getValue()[0];
             text.append("\n ").append(key(item).replace("minecraft:", "")).append(" x").append(carried).append(": wanted from layer ")
                 .append(layer).append(" up (").append(entry.getValue()[1]).append(" cells) - ")
-                .append(layer <= lowest + UP_LAYERS ? "can be put in now" : "too high for now (" + (layer - lowest - UP_LAYERS) + " layers above the window)");
+                .append(layer <= windowTop(lowest) ? "can be put in now" : "too high for now (" + (layer - windowTop(lowest)) + " layers above the window)");
         }
         if (!any) {
             text.append("\n (carries no 8+ of anything the plan still wants)");
@@ -664,7 +664,7 @@ public final class GreatBuild extends SavedData {
             .append(" nothing to put them against, ").append(why[2]).append(" claimed or cooling down, ").append(why[3])
             .append(" not loaded, ").append(why[4]).append(" done already");
         // What the layers it builds in still want (cells to put in; held back: with something still to go under them)
-        for (int layer = lowest; layer <= lowest + UP_LAYERS && layer < schematic.height(); layer++) {
+        for (int layer = lowest; layer <= Math.min(windowTop(lowest), lowest + 16) && layer < schematic.height(); layer++) {
             Map<Item, int[]> left = new java.util.HashMap<>();
             for (int index = pending.nextSetBit(layer * size); index >= 0 && index < (layer + 1) * size; index = pending.nextSetBit(index + 1)) {
                 LegacyBlocks.Spec spec = schematic.at(index);
@@ -872,7 +872,7 @@ public final class GreatBuild extends SavedData {
             } else {
                 int lowest = lowestPendingLayer(time);
                 from = lowest * area;
-                to = Math.min(s.height(), Math.max(lowest, lowestBusyLayer) + UP_LAYERS + 1) * area;
+                to = Math.min(s.height(), windowTop(lowest) + 1) * area;
             }
             int checked = 0;
             for (int index = pending.nextSetBit(from); index >= 0 && index < to && checked < 60000; index = pending.nextSetBit(index + 1), checked++) {
@@ -1167,7 +1167,7 @@ public final class GreatBuild extends SavedData {
             if (bottomUp && step < lowest) {
                 continue;
             }
-            if (bottomUp && step > windowBase + UP_LAYERS) {
+            if (bottomUp && step > windowTop(lowest)) {
                 break;
             }
             if (firstStep >= 0 && step > firstStep + LAYER_WINDOW) {
@@ -1241,6 +1241,18 @@ public final class GreatBuild extends SavedData {
      */
     private int lowestBusyLayer;
     private static final int BUSY_CELLS = 200;
+    /**
+     * The top of the layers built in: up from the busy one till there's this much to put in (five layers at least). The
+     * layers over the busy one held a few fences, torches and some wool, and the stone bricks every bot had brought - two
+     * thousand a layer - were wanted from two layers above the top: the bots dug cobblestone for more all session, 16 blocks in.
+     */
+    private int windowTop;
+    private static final int WINDOW_CELLS = 3000;
+
+    /** The highest layer built in now. */
+    private int windowTop(int lowest) {
+        return Math.max(windowTop, Math.max(lowest, lowestBusyLayer) + UP_LAYERS);
+    }
 
     private int computeLowestPendingLayer() {
         Schematic schematic = plan;
@@ -1250,6 +1262,8 @@ public final class GreatBuild extends SavedData {
         int countLayer = -1;
         int count = 0;
         lowestBusyLayer = floorLayer;
+        windowTop = 0;
+        int busyCells = -1;
         for (int index = pending.nextSetBit(floorLayer * layer); index >= 0 && checked < 20000; index = pending.nextSetBit(index + 1), checked++) {
             LegacyBlocks.Spec spec = schematic.at(index);
             LegacyBlocks.Kind kind = spec.kind();
@@ -1277,10 +1291,22 @@ public final class GreatBuild extends SavedData {
                 countLayer = at;
                 count = 0;
             }
+            if (busyCells >= 0) {
+                if (kind == LegacyBlocks.Kind.EXACT && ++busyCells >= WINDOW_CELLS) {
+                    windowTop = at;
+                    return lowestFound;
+                }
+                continue;
+            }
             if (kind == LegacyBlocks.Kind.EXACT && ++count >= BUSY_CELLS) { // (blocks to put in: not ground to fill, not the other half of a bed)
                 lowestBusyLayer = at;
-                return lowestFound;
+                busyCells = count; // (on up from here to the top of the window)
+                continue;
             }
+        }
+        if (busyCells >= 0) {
+            windowTop = checked >= 20000 ? countLayer : schematic.height(); // (not that much left above it: all of it - as far as looked)
+            return lowestFound;
         }
         lowestBusyLayer = lowestFound >= 0 ? lowestFound : floorLayer;
         return lowestFound >= 0 ? lowestFound : floorLayer;
