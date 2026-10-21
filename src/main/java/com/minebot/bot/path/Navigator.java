@@ -203,13 +203,17 @@ public class Navigator {
         status = Status.IDLE;
     }
 
-    private int lastExpanded = Integer.MAX_VALUE;
-    private boolean lastComplete = true;
-    private long lastSearchAt = Long.MIN_VALUE / 4;
 
     /** Its last searches found only a handful of cells and no way: boxed in, whatever lies beyond (a door it can't get to). */
-    public boolean boxedIn(int maxCells) {
-        return !lastComplete && lastExpanded <= maxCells && bot.level().getGameTime() - lastSearchAt < 20 * 30;
+    /** When its searches found a handful of cells and no way (the last minute's). */
+    private final java.util.ArrayDeque<Long> smallFails = new java.util.ArrayDeque<>();
+    private static final int BOXED_CELLS = 30;
+
+    public boolean boxedIn() {
+        // (three or more in a minute: a short way to somewhere in the same room now and then doesn't count against it)
+        long now = bot.level().getGameTime();
+        smallFails.removeIf(at -> now - at > 20 * 60);
+        return smallFails.size() >= 3;
     }
 
     public Status status() {
@@ -301,9 +305,12 @@ public class Navigator {
                 return status;
             }
             path = search.result();
-            lastExpanded = search.expanded();
-            lastComplete = path != null && path.complete();
-            lastSearchAt = bot.level().getGameTime();
+            if (search.expanded() <= BOXED_CELLS && (path == null || !path.complete())) {
+                smallFails.addLast(bot.level().getGameTime());
+                if (smallFails.size() > 20) {
+                    smallFails.removeFirst();
+                }
+            }
             bot.debug("path {} nodes, {} steps, complete={}, goal {}", search.expanded(), path == null ? 0 : path.size(),
                 path != null && path.complete(), goal);
             search = null;

@@ -382,7 +382,7 @@ public class EscapeTask extends Task {
         if (boxed) {
             return unbox();
         }
-        if (ticks == 0 && !strandedMode && !sealed && !underground(bot) && bot.navigator().boxedIn(30)) {
+        if (ticks == 0 && !strandedMode && !sealed && !underground(bot) && bot.navigator().boxedIn()) {
             // (its ways find a handful of cells and no more, a door beyond a crafting table it can't climb past under the lintel:
             // "a door, so a way out" - and Zola stood in her back room for hours, missing the Great Build. Shut in, then)
             java.util.Set<BlockPos> inside = enclosure(bot, false);
