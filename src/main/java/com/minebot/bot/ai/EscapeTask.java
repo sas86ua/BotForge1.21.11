@@ -55,6 +55,11 @@ public class EscapeTask extends Task {
         if (underground(bot) && bot.areaSeconds() >= 300 && !bot.navigator().isActive() && !GreatBuildTask.isAway(bot)) {
             return true; // (down a pit with nothing to do, nothing tried: Copper, an hour at the bottom of one)
         }
+        if (!underground(bot) && bot.areaSeconds() >= 30 && bot.navigator().boxedIn()) {
+            // (its ways see a handful of cells and no more, over and over: shut in, whatever the walls look like - Redstone in a
+            // pocket of the Great Build's wall, nine cells to move in; Zola in her back room)
+            return true;
+        }
         if (!underground(bot)) {
             // (shut in a room above ground: nowhere to go, its way out walled up - Glowstone, in its own house)
             // (or standing there a minute with nothing to do: shut in by the others' building at the Great Build, it

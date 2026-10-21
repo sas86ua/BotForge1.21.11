@@ -1010,6 +1010,12 @@ public class GreatBuildTask extends Task {
             }
             return Status.RUNNING;
         }
+        if (current.type() != GreatBuild.JobType.FILL && wallsIn(level, current.pos())) {
+            // (a block that would shut a bot - itself or another - in a pit with no way out: later. Building the wall's top
+            // course they bricked each other into one-block wells, five at once)
+            giveUp(build);
+            return Status.RUNNING;
+        }
         if (!place(current)) {
             if (++placeFails > 3) {
                 giveUp(build);
@@ -1062,6 +1068,39 @@ public class GreatBuildTask extends Task {
             return plan.at(index).kind() == LegacyBlocks.Kind.AIR ? blocker : null;
         }
         return BlockRules.canBreak(level, blocker, level.getBlockState(blocker)) ? blocker : null;
+    }
+
+    /** Would a block here leave a player standing next to it with no step to take (on along, or one up)? */
+    private static boolean wallsIn(ServerLevel level, BlockPos pos) {
+        for (net.minecraft.world.entity.player.Player player : level.getEntitiesOfClass(net.minecraft.world.entity.player.Player.class,
+                new AABB(pos).inflate(1.5, 2.0, 1.5))) {
+            BlockPos feet = player.blockPosition();
+            if (feet.equals(pos) || feet.above().equals(pos)) {
+                return true; // (in the cell itself)
+            }
+            if (pos.getY() < feet.getY() || pos.getY() > feet.getY() + 2 || Math.abs(pos.getX() - feet.getX()) + Math.abs(pos.getZ() - feet.getZ()) != 1) {
+                continue;
+            }
+            boolean headFree = clear(level, feet.above(2), pos);
+            int ways = 0;
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                BlockPos side = feet.relative(direction);
+                boolean along = clear(level, side, pos) && clear(level, side.above(), pos);
+                boolean up = headFree && !clear(level, side, pos) && clear(level, side.above(), pos) && clear(level, side.above(2), pos);
+                if (along || up) {
+                    ways++;
+                }
+            }
+            if (ways == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Open for a body, counting the block about to go in at {@code placed}. */
+    private static boolean clear(ServerLevel level, BlockPos at, BlockPos placed) {
+        return !at.equals(placed) && level.getBlockState(at).getCollisionShape(level, at).isEmpty();
     }
 
     private static Predicate<ItemStack> fillFor(LegacyBlocks.Spec spec) {
