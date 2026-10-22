@@ -120,7 +120,7 @@ public class GatherTask extends Task {
                 // (near home too: it felled trees with a full bag and the logs lay where they fell - 278 of them about the houses)
                 if (!stored && !bot.memory().chests().isEmpty()) {
                     stored = true;
-                    child = new StoreTask(bot);
+                    child = ChestTask.store(bot); // (into the chests there are: StoreTask would make a new chest, from logs gathered with this full bag, which would store first, and so on fifteen deep)
                     return Status.RUNNING;
                 }
                 if (!Stash.makeRoom(bot, 1)) {
