@@ -73,7 +73,9 @@ public class VillageTidyTask extends Task {
         }
         BlockPos at = Villages.plan(project).center();
         if (!scanned && bot.blockPosition().distSqr(at) > 20 * 20) {
-            child = new GoToTask(bot, Goal.column(at.getX(), at.getZ(), 8));
+            // (near it, height and all: "over it" was there at once for one down a mine under the village, still 70 blocks off,
+            // and round it went a hundred times a second - Redstone)
+            child = new GoToTask(bot, Goal.near(at, 16));
             return Status.RUNNING;
         }
         if (!scanned) {
