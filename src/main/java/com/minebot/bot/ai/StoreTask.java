@@ -86,6 +86,11 @@ public class StoreTask extends Task {
             }
             case DONE -> {
                 dropJunk();
+                if (ChestTask.bagFull(bot) && !Stash.makeRoom(bot, 4, true)) {
+                    // (the chests full and no room at home for another: "done", and the full bag sent it straight back - Obsidian,
+                    // every two seconds. Put off like any failed need; the rubbish in the chests goes in the lava in time)
+                    return Status.FAILURE;
+                }
                 return Status.SUCCESS;
             }
         }
