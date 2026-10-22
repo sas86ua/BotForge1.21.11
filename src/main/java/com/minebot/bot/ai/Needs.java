@@ -53,8 +53,10 @@ public final class Needs {
             bot.memory().home().pos().getZ(), 12))),
         new Need("food stock", bot -> !JourneyTask.isTravelling(bot) && !GreatBuildTask.isAway(bot) // (a journey sees to its own food)
                 && (Inv.count(bot, Food::isCooked) < LOW_FOOD // (and before one sets off, enough for the road)
-                    || JourneyTask.isDue(bot) && Inv.count(bot, Food::isCooked) < JourneyTask.ROAD_FOOD),
-            bot -> new FoodTask(bot, Food.STOCK, true)),
+                    || JourneyTask.isDue(bot) && Inv.count(bot, Food::isCooked) < JourneyTask.ROAD_FOOD
+                    // (the Great Build near: its food for the site got ready in the days before, not hunted at the last minute)
+                    || GreatBuildPrepTask.dueSoon(bot) && Inv.count(bot, Food::isCooked) < GreatBuildTask.SITE_FOOD / 2),
+            bot -> new FoodTask(bot, GreatBuildPrepTask.dueSoon(bot) ? GreatBuildTask.SITE_FOOD : Food.STOCK, true)),
         // Help another bot out with food or materials we have plenty of
         new Need("share", bot -> !GreatBuildTask.isAway(bot) && Sharing.findOffer(bot) != null, GiveTask::forBestOffer),
         // Take back a crafting table, furnace or campfire put down somewhere for a moment
