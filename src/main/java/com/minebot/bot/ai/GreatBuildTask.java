@@ -76,6 +76,7 @@ public class GreatBuildTask extends Task {
     private final Set<Item> packed = new HashSet<>();
     private final Set<Item> cantGet = new HashSet<>();
     private boolean foodPacked;
+    private boolean foodToppedUp;
     /** Cooked food it takes to the Great Build (and keeps in the bag in the days before: see Needs, "food stock"). */
     public static final int SITE_FOOD = 16;
     private boolean breadPacked;
@@ -531,9 +532,16 @@ public class GreatBuildTask extends Task {
                     return Status.RUNNING;
                 }
             }
-            if (!foodPacked && Inv.count(bot, Food::isCooked) < SITE_FOOD) {
+            if (!foodPacked && Inv.count(bot, Food::isCooked) < JourneyTask.ROAD_FOOD) {
                 foodPacked = true;
-                child = new FoodTask(bot, SITE_FOOD, true); // (six, the road's, and half the session went on hunting round the bare site - Tuff, Zealot, Obsidian)
+                child = new FoodTask(bot, JourneyTask.ROAD_FOOD, true);
+                return Status.RUNNING;
+            }
+            if (!foodToppedUp && Inv.count(bot, Food::isCooked) < SITE_FOOD) {
+                // More for the site, from the chests and what's about (not hunting far for it: that took its order's time) - with
+                // six, half the session went on hunting round the bare site (Tuff, Zealot, Obsidian)
+                foodToppedUp = true;
+                child = new FoodTask(bot, SITE_FOOD, true, true, 0);
                 return Status.RUNNING;
             }
             if (!toolPacked) {
