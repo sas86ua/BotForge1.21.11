@@ -134,15 +134,25 @@ public class JunkRunTask extends Task {
         return seeds;
     }
 
-    /** Bread, wheat, potatoes (with the baked ones) and carrots in all its chests, by {@link #limitKey}. */
-    static Map<Item, Integer> limitedFoodAtHome(BotPlayer bot) {
-        Map<Item, Integer> food = new HashMap<>();
+    /** Bread, wheat, potatoes (with the baked ones), carrots and the limited loot in all its chests, by {@link #limitKey}. */
+    static Map<Item, Integer> limitedAtHome(BotPlayer bot) {
+        Map<Item, Integer> limited = new HashMap<>();
         for (Map.Entry<Item, Integer> entry : bulkAtHome(bot).entrySet()) {
-            if (isLimitedFood(new ItemStack(entry.getKey()))) {
-                food.put(entry.getKey(), entry.getValue());
+            if (isLimited(new ItemStack(entry.getKey()))) {
+                limited.put(entry.getKey(), entry.getValue());
             }
         }
-        return food;
+        return limited;
+    }
+
+    /** Food or loot kept at home only up to a limit, bag and chests together. */
+    static boolean isLimited(ItemStack stack) {
+        return isLimitedFood(stack) || isLimitedLoot(stack);
+    }
+
+    /** How much of a limited kind (by {@link #limitKey}) it keeps. */
+    static int limit(BotPlayer bot, Item key) {
+        return keep(bot, key);
     }
 
     /** Bulk blocks of each kind in all its chests. */
