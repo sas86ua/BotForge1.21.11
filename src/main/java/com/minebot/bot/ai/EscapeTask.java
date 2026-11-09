@@ -124,6 +124,14 @@ public class EscapeTask extends Task {
         if (++ticks > MAX_TICKS) {
             return Status.FAILURE;
         }
+        if (ticks > UNBOX_TICKS && breaker.target() == null) {
+            // (half a minute and still in it: through the side instead - Tuff, in a ladder shaft high on the Great Build's wall
+            // with a rung gone, stood three minutes at a time five times over, till the side was broken through)
+            bot.debug("still in the hole after {} s; cutting my way out sideways", UNBOX_TICKS / 20);
+            boxed = false;
+            hewing = bot.blockPosition();
+            return Status.RUNNING;
+        }
         if (breaker.target() != null && breaker.tick() == BlockBreaker.Result.RUNNING) {
             return Status.RUNNING;
         }
@@ -195,6 +203,8 @@ public class EscapeTask extends Task {
     }
 
     private boolean boxed;
+    /** How long it tries its way up out of a hole before cutting through the side. */
+    private static final int UNBOX_TICKS = 20 * 30;
 
     /**
      * Out in the open but going nowhere: no ways found for minutes, in the same few blocks (on a ledge of old scaffolding six
