@@ -118,8 +118,8 @@ public final class Inv {
         // later - with the wheat out of hand, the sheep stopped following (Lapis, 3000 swaps a session)
         for (int slot = HOTBAR_SIZE - 1; slot >= 0; slot--) {
             ItemStack stack = inventory.getItem(slot);
-            if (!(stack.getItem() instanceof net.minecraft.world.item.ProjectileWeaponItem) && !stack.is(ItemTags.SWORDS)) {
-                return slot;
+            if (!(stack.getItem() instanceof net.minecraft.world.item.ProjectileWeaponItem) && !isWeapon(stack)) {
+                return slot; // (an axe too: with no sword it's the weapon Ranged keeps on the hotbar - Sunny's pillar blocks went)
             }
         }
         return HOTBAR_SIZE - 1;

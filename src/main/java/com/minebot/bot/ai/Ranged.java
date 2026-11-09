@@ -88,6 +88,15 @@ public final class Ranged {
             return;
         }
         int target = hotbar >= 0 ? hotbar : inventory.getItem(0).isEmpty() || !is(inventory.getItem(0)) ? 0 : 8;
+        if (hotbar < 0 && target == inventory.getSelectedSlot()) {
+            // (not the one in hand: Sunny pillaring up, the block swapped for a stone axe every two seconds - "could not pillar")
+            for (int slot = 8; slot >= 0; slot--) {
+                if (slot != inventory.getSelectedSlot() && !is(inventory.getItem(slot)) && !isMelee(inventory.getItem(slot))) {
+                    target = slot;
+                    break;
+                }
+            }
+        }
         ItemStack moved = inventory.getItem(target);
         inventory.setItem(target, inventory.getItem(best));
         inventory.setItem(best, moved);
