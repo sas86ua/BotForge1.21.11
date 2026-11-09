@@ -65,6 +65,9 @@ public class PathFinder {
      */
     private static final int SURFACE_DEPTH = 4;
     private static final double SURFACE_PENALTY = 40.0;
+    /** On a long way overland, each step this far under the surface costs this much more (a step is about 4.6). */
+    private static final int DEEP_DEPTH = 8;
+    private static final double DEEP_PENALTY = 3.0;
     /** >1 makes the search greedier: much faster, paths slightly longer. */
     private static final double HEURISTIC = WALK * 1.4;
     private static final int MAX_SAFE_FALL = 3;
@@ -483,6 +486,11 @@ public class PathFinder {
             node = new Node(x, y, z);
             node.h = goal.distance(x, y, z) * HEURISTIC;
             node.hazard = hazardPenalty(x, y, z); // (looked at once per spot, not for every way into it)
+            if (goal.overland() && deepUnderground(x, y, z)) {
+                // (on the way home from the Great Build, the way through the caves was the cheaper: Zealot, at -36 a thousand
+                // blocks from home, went hunting there and fetching food from mineshaft chests till it had 4 hp left)
+                node.hazard += DEEP_PENALTY;
+            }
             nodes.put(key, node);
         } else if (node.closed) {
             return;
@@ -646,6 +654,15 @@ public class PathFinder {
     private boolean standable(int x, int y, int z) {
         BlockState state = state(x, y, z);
         return state != null && BlockRules.isStandable(level, cursor.set(x, y, z), state);
+    }
+
+    /** Well under the ground here (a cave, a mine)? */
+    private boolean deepUnderground(int x, int y, int z) {
+        if (state(x, y, z) == null) {
+            return false;
+        }
+        int top = cachedChunk.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15);
+        return y < top - DEEP_DEPTH;
     }
 
     /** In the top layers of the ground here (or the chunk isn't loaded)? */

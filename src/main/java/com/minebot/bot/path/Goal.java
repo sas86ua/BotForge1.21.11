@@ -20,6 +20,11 @@ public interface Goal {
         return isReached(pos.getX(), pos.getY(), pos.getZ());
     }
 
+    /** A long way overland (any height at the end): over the top, not through the caves under it. */
+    default boolean overland() {
+        return false;
+    }
+
     /** Out in the open: feet at the top of the ground (no rock above any more). */
     static Goal surface(net.minecraft.server.level.ServerLevel level) {
         return new Goal() {
@@ -175,6 +180,11 @@ public interface Goal {
                 double dx = x - targetX;
                 double dz = z - targetZ;
                 return Math.sqrt(dx * dx + dz * dz);
+            }
+
+            @Override
+            public boolean overland() {
+                return true;
             }
 
             @Override
