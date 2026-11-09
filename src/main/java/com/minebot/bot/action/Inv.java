@@ -113,7 +113,15 @@ public final class Inv {
                 return slot;
             }
         }
-        // Keep the weapons in the first slots; swap out the last hotbar slot
+        // Keep the weapons: the bow (Ranged keeps it on the hotbar, every two seconds) and the swords. Swapping
+        // the last slot every time put wheat where the bow was, and the bow back in its place two seconds
+        // later - with the wheat out of hand, the sheep stopped following (Lapis, 3000 swaps a session)
+        for (int slot = HOTBAR_SIZE - 1; slot >= 0; slot--) {
+            ItemStack stack = inventory.getItem(slot);
+            if (!(stack.getItem() instanceof net.minecraft.world.item.ProjectileWeaponItem) && !stack.is(ItemTags.SWORDS)) {
+                return slot;
+            }
+        }
         return HOTBAR_SIZE - 1;
     }
 

@@ -131,6 +131,12 @@ public final class Ranged {
                 target = slot;
             }
         }
+        // (not the one in hand: the pickaxe it digs with, the wheat it leads sheep by)
+        for (int slot = 8; slot >= 0 && target < 0; slot--) {
+            if (slot != inventory.getSelectedSlot() && !isMelee(inventory.getItem(slot))) {
+                target = slot;
+            }
+        }
         if (target < 0) {
             target = 8;
         }
