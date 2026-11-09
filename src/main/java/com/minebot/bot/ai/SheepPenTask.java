@@ -179,7 +179,10 @@ public class SheepPenTask extends Task {
                 return false; // (a block left inside: a step up to the fence)
             }
         }
-        return true;
+        // The step in front of the gate gone (dug, a pit under it): the way to the gate is the air above a drop, and every
+        // way in was a search through the whole countryside (Lapis, ten a time, and a third of its day at the pen)
+        BlockPos step = gate.relative(out(pen, gate)).below();
+        return !level.isLoaded(step) || !level.getBlockState(step).canBeReplaced();
     }
 
     private static List<Sheep> sheepIn(ServerLevel level, BlockPos pen) {
