@@ -413,6 +413,9 @@ public final class Home {
         }
     }
 
+    /** A chest further than this from home is no use (Needs: "way home" turns it round at 300). */
+    private static final int FAR_CHEST = 250;
+
     public static void validate(BotPlayer bot) {
         BotMemory memory = bot.memory();
         ServerLevel level = levelIfHere(bot);
@@ -455,8 +458,14 @@ public final class Home {
             bot.debug("my house round the bed at {} is gone; I'll build one again", bed.toShortString());
             houseLost(bot);
         }
+        var home = memory.home();
         for (BlockPos chest : List.copyOf(memory.chests())) {
             if (level.isLoaded(chest) && !(level.getBlockState(chest).getBlock() instanceof ChestBlock)) {
+                memory.removeChest(chest);
+            } else if (home != null && home.dimension() == level.dimension() && !chest.closerThan(home.pos(), FAR_CHEST)) {
+                // The chests of a home it lost stay its - but not out past where "way home" turns it round: Zola, its old
+                // chests 430 blocks off, set out for its gear in them 170 times and was turned back home halfway (13 hours)
+                bot.debug("my chest at {} is too far from home to use; leaving it", chest.toShortString());
                 memory.removeChest(chest);
             }
         }
