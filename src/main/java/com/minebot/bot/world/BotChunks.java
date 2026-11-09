@@ -17,7 +17,9 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class BotChunks {
     /** Chunks round a bot where mobs move and spawn, crops grow, furnaces burn. */
-    public static final int RADIUS = 5;
+    // (5 - 11x11 chunks a bot - and the mobs, spawning and chunk ticks round fifteen bots took half the tick, which ran
+    // at 40-47 ms of the 50 with nobody on: the server fell seconds behind now and then. 9x9 is a third fewer chunks)
+    public static final int RADIUS = 4;
     /** A ticket "with radius" r is at level 33 - r; entity ticking reaches level 31, so r - 2 chunks. */
     private static final int TICKET_OFFSET = 2;
 
