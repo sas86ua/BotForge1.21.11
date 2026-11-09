@@ -34,6 +34,8 @@ public class LootTask extends Task {
     private static final int PLAYER_DISTANCE = 8;
     private static final int MAX_TICKS = 20 * 30;
     private static final int FRESH_TICKS = 20 * 10;
+    /** How far a way to something lying close by is looked for. */
+    private static final int NEAR_NODES = 4000;
 
     /** Items a bot couldn't get to, so it doesn't keep trying. */
     private static final Map<UUID, Set<UUID>> UNREACHABLE = new HashMap<>();
@@ -121,7 +123,13 @@ public class LootTask extends Task {
             return Status.SUCCESS; // picked up (by us or someone else)
         }
         if (!bot.navigator().isActive()) {
-            bot.navigator().navigate(Goal.atItem(bot.level(), target.position()));
+            // (a thing lying a few blocks off is reached in a few hundred steps of the search, or not at all: at the Great Build
+            // the searches for drops down in pits and walled-in corners took a fifth of the bots' share of the tick)
+            if (bot.distanceToSqr(target) <= RANGE * RANGE) {
+                bot.navigator().navigate(Goal.atItem(bot.level(), target.position()), NEAR_NODES);
+            } else {
+                bot.navigator().navigate(Goal.atItem(bot.level(), target.position()));
+            }
         }
         Navigator.Status status = bot.navigator().tick();
         if (status == Navigator.Status.FAILED || ++ticks > MAX_TICKS) {
