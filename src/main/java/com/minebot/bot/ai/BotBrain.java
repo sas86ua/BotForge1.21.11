@@ -33,6 +33,8 @@ public class BotBrain {
     private @Nullable Needs.Need currentNeed;
     private long currentSince;
     private final Map<String, Long> cooldownUntil = new HashMap<>();
+    /** Needs that failed, how many times in a row (till one succeeds). */
+    private final Map<String, Integer> failuresInRow = new HashMap<>();
     /** Needs whose task finished at once, how many times in a row. */
     private final Map<String, Integer> quickFinishes = new HashMap<>();
     private @Nullable String lastResult;
@@ -169,12 +171,38 @@ public class BotBrain {
                 quickFinishes.remove(currentNeed.id());
             }
             if (status == Task.Status.FAILURE && currentNeed != null) {
-                cooldownUntil.put(currentNeed.id(), bot.level().getGameTime() + FAILED_NEED_COOLDOWN);
+                cooldownUntil.put(currentNeed.id(), bot.level().getGameTime() + failedCooldown(currentNeed));
                 bot.debug("need {} failed, retrying later", currentNeed.id());
+            } else if (status == Task.Status.SUCCESS && currentNeed != null) {
+                failuresInRow.remove(currentNeed.id());
             }
             lastResult = (currentNeed != null ? currentNeed.id() : "idle") + " -> " + status;
             stopCurrent();
         }
+    }
+
+    /**
+     * How long a need that failed is left alone: a few minutes; the ones less pressing than a roof over its head
+     * twice as long for each failure in a row, up to eight times (Bedrock tried 248 times to furnish a room it
+     * couldn't get into, Deepslate went after feathers 175 times with no chicken about).
+     */
+    private long failedCooldown(Needs.Need need) {
+        int inRow = failuresInRow.merge(need.id(), 1, Integer::sum);
+        if (Needs.ALL.indexOf(need) <= LAST_PRESSING) {
+            return FAILED_NEED_COOLDOWN;
+        }
+        return (long) FAILED_NEED_COOLDOWN << Math.min(inRow - 1, 3);
+    }
+
+    private static final int LAST_PRESSING = indexOf("shelter");
+
+    private static int indexOf(String id) {
+        for (int i = 0; i < Needs.ALL.size(); i++) {
+            if (Needs.ALL.get(i).id().equals(id)) {
+                return i;
+            }
+        }
+        return Needs.ALL.size();
     }
 
     private @Nullable Needs.Need nextNeed() {
