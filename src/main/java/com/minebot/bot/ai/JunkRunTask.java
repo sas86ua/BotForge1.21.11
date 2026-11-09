@@ -78,6 +78,9 @@ public class JunkRunTask extends Task {
         }
         // (plus what it's to bring to the Great Build)
         int ordered = com.minebot.bot.build.GreatBuild.get(bot.level().getServer()).orderOf(bot.getUUID()).getOrDefault(item, 0);
+        if (isLimitedLoot(new ItemStack(item))) {
+            return LOOT_KEEP + ordered;
+        }
         if (!bot.memory().houseDone() && Blueprint.isStone(new ItemStack(item))) {
             return Math.max(BULK_KEEP, HousePrepTask.stoneNeeded() + 32) + ordered;
         }
@@ -91,6 +94,15 @@ public class JunkRunTask extends Task {
         // (and potatoes, raw and baked together, and carrots)
         return stack.is(Items.BREAD) || stack.is(Items.WHEAT) || stack.is(Items.POTATO) || stack.is(Items.BAKED_POTATO)
             || stack.is(Items.CARROT);
+    }
+
+    /** Mob drops and ore it has no use for, kept at home up to a stack of each: more is rubbish. */
+    static final int LOOT_KEEP = 64;
+
+    static boolean isLimitedLoot(ItemStack stack) {
+        // (Makena's chests held ten stacks of bones and seven of raw copper, all of them full, and no room
+        // at home for another: what it brought home stayed in the bag)
+        return stack.is(Items.BONE) || stack.is(Items.GUNPOWDER) || stack.is(Items.SPIDER_EYE) || stack.is(Items.RAW_COPPER);
     }
 
     /** What a limit counts it under: baked potatoes with the raw ones. */
@@ -140,7 +152,7 @@ public class JunkRunTask extends Task {
             RandomizableContainerBlockEntity chest = container(bot, pos);
             for (int i = 0; chest != null && i < chest.getContainerSize(); i++) {
                 ItemStack stack = chest.getItem(i);
-                if (Stash.isBulk(stack) || isLimitedFood(stack)) {
+                if (Stash.isBulk(stack) || isLimitedFood(stack) || isLimitedLoot(stack)) {
                     bulk.merge(limitKey(stack.getItem()), stack.getCount(), Integer::sum);
                 }
             }
@@ -215,7 +227,7 @@ public class JunkRunTask extends Task {
                 int take = Math.min(stack.getCount(), over.get(SEEDS));
                 over.merge(SEEDS, -take, Integer::sum);
                 result.put(i, take);
-            } else if ((Stash.isBulk(stack) || isLimitedFood(stack)) && over.getOrDefault(limitKey(stack.getItem()), 0) > 0) {
+            } else if ((Stash.isBulk(stack) || isLimitedFood(stack) || isLimitedLoot(stack)) && over.getOrDefault(limitKey(stack.getItem()), 0) > 0) {
                 Item key = limitKey(stack.getItem());
                 int take = Math.min(stack.getCount(), over.get(key));
                 over.merge(key, -take, Integer::sum);
