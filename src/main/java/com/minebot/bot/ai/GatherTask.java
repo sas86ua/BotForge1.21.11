@@ -31,6 +31,7 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -75,6 +76,23 @@ public class GatherTask extends Task {
         this.target = target;
         this.blocks = source.blocksFor(target);
         this.breaker = new BlockBreaker(bot);
+        long now = bot.level().getGameTime();
+        GAVE_UP.getOrDefault(bot.getUUID(), Map.of()).forEach((pos, until) -> {
+            if (until > now) {
+                failed.add(pos);
+            }
+        });
+    }
+
+    /**
+     * Blocks each bot gave up on (no way there), and till when (game time) they're left out: the next go at the same need
+     * started afresh and found them again - the iron under Tuff's lake was searched for twelve times in a quarter of an hour.
+     */
+    private static final Map<java.util.UUID, Map<BlockPos, Long>> GAVE_UP = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long GAVE_UP_TICKS = 20 * 60 * 20;
+
+    public static void forget(java.util.UUID bot) {
+        GAVE_UP.remove(bot);
     }
 
     @Override
@@ -298,6 +316,12 @@ public class GatherTask extends Task {
 
     private void giveUpOn(BlockPos pos) {
         failed.add(pos);
+        Map<BlockPos, Long> gaveUp = GAVE_UP.computeIfAbsent(bot.getUUID(), id -> new java.util.concurrent.ConcurrentHashMap<>());
+        long now = bot.level().getGameTime();
+        if (gaveUp.size() > 200) {
+            gaveUp.values().removeIf(until -> until <= now);
+        }
+        gaveUp.put(pos.immutable(), now + GAVE_UP_TICKS);
         if (source == Sources.LOGS) {
             for (BlockPos log : BlockPos.betweenClosed(pos.offset(-2, -12, -2), pos.offset(2, 12, 2))) {
                 if (bot.level().getBlockState(log).is(BlockTags.LOGS)) {

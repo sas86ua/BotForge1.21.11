@@ -227,6 +227,7 @@ public final class BotManager {
         com.minebot.bot.ai.CraftTask.forget(id);
         com.minebot.bot.ai.SmeltTask.forget(id);
         com.minebot.bot.ai.LootTask.forget(id);
+        com.minebot.bot.ai.GatherTask.forget(id);
         com.minebot.bot.ai.PlantTask.forget(id);
         com.minebot.bot.ai.FillHoleTask.forget(id);
         com.minebot.bot.ai.DumpTask.forget(id);
