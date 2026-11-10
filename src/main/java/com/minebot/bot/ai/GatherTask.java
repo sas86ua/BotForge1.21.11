@@ -69,6 +69,11 @@ public class GatherTask extends Task {
     /** A full bag near home: it has been to the chests with it. */
     private boolean stored;
     private static final int MAX_RECYCLES = 150;
+    /** What the last look round found and it has yet to dig (see findNext), and where it looked from. */
+    private final List<BlockPos> nearby = new ArrayList<>();
+    private @Nullable BlockPos nearbyFrom;
+    /** Further than this from where it looked, it looks again. */
+    private static final int NEARBY_REUSE = 8;
 
     public GatherTask(BotPlayer bot, Sources.Mine source, Target target) {
         super(bot);
@@ -371,18 +376,29 @@ public class GatherTask extends Task {
             maxY = Math.min(level.getMaxY(), center.getY() + 24);
         }
         BlockPos from = center;
-        List<BlockPos> candidates = BlockSearch.find(level, searchCenter, SEARCH_RADIUS, minY, maxY, blocks,
-            (pos, state) -> (rule == null || rule.allows(pos)) && !failed.contains(pos)
-                && bot.memory().inZone(level.dimension(), pos)
-                && !ProtectedAreas.isProtected(level, pos)
-                && !nearBuilding(pos, buildings)
-                && !nearWater(level, pos)
-                && (!logs || BlockRules.isNaturalTreeLog(level, pos, state) && (scaffold || withinReachOfGround(level, pos))),
-            12);
+        java.util.function.BiPredicate<BlockPos, BlockState> fit = (pos, state) -> (rule == null || rule.allows(pos)) && !failed.contains(pos)
+            && bot.memory().inZone(level.dimension(), pos)
+            && !ProtectedAreas.isProtected(level, pos)
+            && !nearBuilding(pos, buildings)
+            && !nearWater(level, pos)
+            && (!logs || BlockRules.isNaturalTreeLog(level, pos, state) && (scaffold || withinReachOfGround(level, pos)));
+        // What the last look found and is still there to dig, while it is still about where it looked from: the next of
+        // those, not a new look round after every block (a quarry is dug a block every second or two)
+        if (nearbyFrom == null || !nearbyFrom.closerThan(from, NEARBY_REUSE)) {
+            nearby.clear();
+        }
+        nearby.removeIf(pos -> !level.isLoaded(pos) || !blocks.test(level.getBlockState(pos)) || !fit.test(pos, level.getBlockState(pos)));
+        if (nearby.isEmpty()) {
+            nearby.addAll(BlockSearch.find(level, searchCenter, SEARCH_RADIUS, minY, maxY, blocks, fit, 12));
+            nearbyFrom = from;
+        }
         // Prefer blocks out in the open over ones that need a tunnel
-        BlockPos next = candidates.stream()
+        BlockPos next = nearby.stream()
             .min(Comparator.comparingDouble(pos -> Math.sqrt(pos.distSqr(from)) + (isExposed(level, pos) ? 0 : 8)))
             .orElse(null);
+        if (next != null) {
+            nearby.remove(next);
+        }
         if (rule != null && next != null) {
             rule.dugAt(next);
         }
