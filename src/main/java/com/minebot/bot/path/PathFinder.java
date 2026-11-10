@@ -48,8 +48,6 @@ public class PathFinder {
     private static final long HOME_NO_DIG = 8;
     /** Extra cost of a step right beside lava or fire. */
     private static final double HAZARD_PENALTY = 60;
-    /** Lava or fire, by block state (asked for the blocks round every spot looked at). */
-    private static final java.util.Map<BlockState, Boolean> HAZARD = new java.util.concurrent.ConcurrentHashMap<>();
     private static final double CLIMB = 6.0;
     /** Putting up a ladder: under a pillar, but well over climbing one that's there (a walk round to it is cheaper). */
     private static final double LADDER_COST = 16.0;
@@ -238,13 +236,13 @@ public class PathFinder {
 
     private boolean isDoor(int x, int y, int z) {
         BlockState state = state(x, y, z);
-        return state != null && state.is(BlockTags.DOORS);
+        return state != null && BlockRules.isDoor(state);
     }
 
     /** A door in this cell that doesn't open this way: through it only straight, along its facing. */
     private boolean doorAcross(int x, int y, int z, Direction direction) {
         BlockState state = state(x, y, z);
-        return state != null && state.is(BlockTags.DOORS) && state.hasProperty(net.minecraft.world.level.block.DoorBlock.FACING)
+        return state != null && BlockRules.isDoor(state) && state.hasProperty(net.minecraft.world.level.block.DoorBlock.FACING)
             && state.getValue(net.minecraft.world.level.block.DoorBlock.FACING).getAxis() != direction.getAxis();
     }
 
@@ -303,7 +301,7 @@ public class PathFinder {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     BlockState state = state(x + dx, y + dy, z + dz);
-                    if (state != null && (state.is(BlockTags.DOORS) || state.is(BlockTags.FENCE_GATES))) {
+                    if (state != null && (BlockRules.isDoor(state) || BlockRules.isGate(state))) {
                         return true;
                     }
                 }
@@ -515,7 +513,7 @@ public class PathFinder {
                         continue;
                     }
                     BlockState state = state(x + dx, y + dy, z + dz);
-                    if (state != null && !state.isAir() && HAZARD.computeIfAbsent(state, s -> BlockRules.isLava(s) || s.is(BlockTags.FIRE))) {
+                    if (state != null && BlockRules.isHot(state)) {
                         return HAZARD_PENALTY;
                     }
                 }
@@ -529,11 +527,11 @@ public class PathFinder {
         if (state == null) {
             return INF;
         }
-        if (state.is(net.minecraft.tags.BlockTags.FENCE_GATES)
+        if (BlockRules.isGate(state)
             && com.minebot.bot.ai.SheepPenTask.isGate(level.getServer(), x, y, z, bot.getUUID())) {
             return INF; // (another's sheep pen gate: no way through, the sheep would get out)
         }
-        if (state.is(net.minecraft.tags.BlockTags.FENCE_GATES) && state.hasProperty(net.minecraft.world.level.block.FenceGateBlock.FACING)) {
+        if (BlockRules.isGate(state) && state.hasProperty(net.minecraft.world.level.block.FenceGateBlock.FACING)) {
             // A gate in a balcony's railing: a drop on its other side, not a way out (Copper kept trying it from his house)
             Direction facing = state.getValue(net.minecraft.world.level.block.FenceGateBlock.FACING);
             for (Direction side : new Direction[] {facing, facing.getOpposite()}) {

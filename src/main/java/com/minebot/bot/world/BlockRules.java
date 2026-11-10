@@ -22,18 +22,45 @@ public final class BlockRules {
     private BlockRules() {
     }
 
-    public static boolean isWater(BlockState state) {
-        return state.getFluidState().is(FluidTags.WATER);
+    /**
+     * What a block state is, worked out once and kept: the path search asks these of every block it looks at, each
+     * answer was a handful of tag lookups, and together they were half the time a search took.
+     */
+    private static final java.util.Map<BlockState, Integer> FLAGS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int WATER = 0x1;
+    private static final int LAVA = 0x2;
+    private static final int DANGEROUS = 0x4;
+    private static final int OPENABLE = 0x8;
+    private static final int IRON_DOOR = 0x10;
+    private static final int CLIMBABLE = 0x20;
+    private static final int DOOR = 0x40;
+    private static final int GATE = 0x80;
+    /** Lava or fire. */
+    private static final int HOT = 0x100;
+    /** A door or gate standing open. */
+    private static final int OPEN = 0x200;
+    /** Nothing to stand on whatever its shape: fences, walls, gates, ladders, what hurts. */
+    private static final int NO_STANDING = 0x400;
+    /** Its shape is the same wherever it stands: the two answers below hold for the state. */
+    private static final int FIXED_SHAPE = 0x800;
+    private static final int PASSABLE = 0x1000;
+    private static final int STANDABLE = 0x2000;
+
+    private static int flags(BlockState state) {
+        Integer known = FLAGS.get(state);
+        if (known == null) {
+            known = computeFlags(state);
+            FLAGS.put(state, known);
+        }
+        return known;
     }
 
-    public static boolean isLava(BlockState state) {
-        return state.getFluidState().is(FluidTags.LAVA);
-    }
-
-    /** Blocks that hurt, trap or slow a bot badly when it walks into them. */
-    public static boolean isDangerous(BlockState state) {
-        return isLava(state)
-            || state.is(BlockTags.FIRE)
+    private static int computeFlags(BlockState state) {
+        boolean water = state.getFluidState().is(FluidTags.WATER);
+        boolean lava = state.getFluidState().is(FluidTags.LAVA);
+        boolean fire = state.is(BlockTags.FIRE);
+        boolean dangerous = lava
+            || fire
             || state.is(Blocks.MAGMA_BLOCK)
             || state.is(Blocks.CACTUS)
             || state.is(Blocks.SWEET_BERRY_BUSH)
@@ -42,48 +69,35 @@ public final class BlockRules {
             || state.is(Blocks.COBWEB)
             || state.is(Blocks.POINTED_DRIPSTONE)
             || state.getBlock() instanceof CampfireBlock && state.getValue(CampfireBlock.LIT);
-    }
-
-    /** Wooden doors and fence gates: passable once opened. */
-    public static boolean isOpenable(BlockState state) {
-        return state.is(BlockTags.WOODEN_DOORS) || state.is(BlockTags.FENCE_GATES);
-    }
-
-    /**
-     * Opened by a bot here: wooden doors and gates anywhere, and iron doors on the Great Build's site - no button or plate
-     * wired to them while it's built, and the bots that worked in those rooms were shut in. Elsewhere an iron door is
-     * someone's lock, and stays one.
-     */
-    public static boolean isOpenable(BlockState state, BlockPos pos) {
-        return isOpenable(state) || isIronDoor(state) && com.minebot.bot.build.GreatBuild.nearSite(pos);
-    }
-
-    public static boolean isIronDoor(BlockState state) {
-        return state.is(Blocks.IRON_DOOR);
-    }
-
-    /** The bot's body can occupy this block (air, plants, water, carpet...). */
-    public static boolean isPassable(BlockGetter level, BlockPos pos, BlockState state) {
-        if (isDangerous(state)) {
-            return false;
+        boolean gate = state.is(BlockTags.FENCE_GATES);
+        boolean openable = state.is(BlockTags.WOODEN_DOORS) || gate;
+        boolean ironDoor = state.is(Blocks.IRON_DOOR);
+        boolean climbable = state.is(BlockTags.CLIMBABLE) && !state.is(Blocks.SCAFFOLDING);
+        boolean open = (openable || ironDoor) && state.hasProperty(BlockStateProperties.OPEN) && state.getValue(BlockStateProperties.OPEN);
+        boolean noStanding = dangerous || state.is(BlockTags.FENCES) || state.is(BlockTags.WALLS) || gate || climbable;
+        int flags = (water ? WATER : 0) | (lava ? LAVA : 0) | (dangerous ? DANGEROUS : 0) | (openable ? OPENABLE : 0)
+            | (ironDoor ? IRON_DOOR : 0) | (climbable ? CLIMBABLE : 0) | (state.is(BlockTags.DOORS) ? DOOR : 0) | (gate ? GATE : 0)
+            | (lava || fire ? HOT : 0) | (open ? OPEN : 0) | (noStanding ? NO_STANDING : 0);
+        if (!state.getBlock().hasDynamicShape()) {
+            // (the shape the game itself keeps for the state, and gives for any place)
+            VoxelShape shape = state.getCollisionShape(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+            flags |= FIXED_SHAPE;
+            if (!dangerous && (open || climbable || steppedOver(shape))) {
+                flags |= PASSABLE;
+            }
+            if (!noStanding && stoodOn(shape)) {
+                flags |= STANDABLE;
+            }
         }
-        if ((isOpenable(state) || isIronDoor(state)) && state.hasProperty(BlockStateProperties.OPEN) && state.getValue(BlockStateProperties.OPEN)) {
-            return true; // an open door is just a thin panel at the side
-        }
-        if (isClimbable(state) && !state.is(Blocks.SCAFFOLDING)) {
-            return true; // a ladder or vines: a thin panel at the side, walked into and climbed
-        }
-        VoxelShape shape = state.getCollisionShape(level, pos);
-        // Thin things like carpets and snow layers are simply stepped over
+        return flags;
+    }
+
+    /** Thin things like carpets and snow layers are simply stepped over. */
+    private static boolean steppedOver(VoxelShape shape) {
         return shape.isEmpty() || shape.max(Direction.Axis.Y) <= 0.2;
     }
 
-    /** The bot can stand on top of this block. */
-    public static boolean isStandable(BlockGetter level, BlockPos pos, BlockState state) {
-        if (isDangerous(state) || state.is(BlockTags.FENCES) || state.is(BlockTags.WALLS) || state.is(BlockTags.FENCE_GATES) || isClimbable(state)) {
-            return false;
-        }
-        VoxelShape shape = state.getCollisionShape(level, pos);
+    private static boolean stoodOn(VoxelShape shape) {
         if (shape.isEmpty()) {
             return false;
         }
@@ -91,8 +105,76 @@ public final class BlockRules {
         return top >= 0.5 && top <= 1.0;
     }
 
+    public static boolean isWater(BlockState state) {
+        return (flags(state) & WATER) != 0;
+    }
+
+    public static boolean isLava(BlockState state) {
+        return (flags(state) & LAVA) != 0;
+    }
+
+    /** Lava or fire. */
+    public static boolean isHot(BlockState state) {
+        return (flags(state) & HOT) != 0;
+    }
+
+    /** Blocks that hurt, trap or slow a bot badly when it walks into them. */
+    public static boolean isDangerous(BlockState state) {
+        return (flags(state) & DANGEROUS) != 0;
+    }
+
+    /** Wooden doors and fence gates: passable once opened. */
+    public static boolean isOpenable(BlockState state) {
+        return (flags(state) & OPENABLE) != 0;
+    }
+
+    /**
+     * Opened by a bot here: wooden doors and gates anywhere, and iron doors on the site of the Great Build - no button or
+     * plate wired to them while it is built, and the bots that worked in those rooms were shut in. Elsewhere an iron door
+     * is the lock of whoever put it there, and stays one.
+     */
+    public static boolean isOpenable(BlockState state, BlockPos pos) {
+        int flags = flags(state);
+        return (flags & OPENABLE) != 0 || (flags & IRON_DOOR) != 0 && com.minebot.bot.build.GreatBuild.nearSite(pos);
+    }
+
+    public static boolean isIronDoor(BlockState state) {
+        return (flags(state) & IRON_DOOR) != 0;
+    }
+
+    /** A door of any kind (wood, iron, copper). */
+    public static boolean isDoor(BlockState state) {
+        return (flags(state) & DOOR) != 0;
+    }
+
+    public static boolean isGate(BlockState state) {
+        return (flags(state) & GATE) != 0;
+    }
+
+    /** The body of the bot can occupy this block (air, plants, water, carpet...). */
+    public static boolean isPassable(BlockGetter level, BlockPos pos, BlockState state) {
+        int flags = flags(state);
+        if ((flags & FIXED_SHAPE) != 0) {
+            return (flags & PASSABLE) != 0;
+        }
+        if ((flags & DANGEROUS) != 0) {
+            return false;
+        }
+        // An open door is just a thin panel at the side; a ladder or vines too, walked into and climbed
+        return (flags & (OPEN | CLIMBABLE)) != 0 || steppedOver(state.getCollisionShape(level, pos));
+    }
+
+    /** The bot can stand on top of this block. */
+    public static boolean isStandable(BlockGetter level, BlockPos pos, BlockState state) {
+        int flags = flags(state);
+        if ((flags & FIXED_SHAPE) != 0) {
+            return (flags & STANDABLE) != 0;
+        }
+        return (flags & NO_STANDING) == 0 && stoodOn(state.getCollisionShape(level, pos));
+    }
+
     public static boolean isClimbable(BlockState state) {
-        return state.is(BlockTags.CLIMBABLE) && !state.is(Blocks.SCAFFOLDING);
+        return (flags(state) & CLIMBABLE) != 0;
     }
 
     /** Blocks that only appear in buildings: player houses, villages, other bots' huts. */
