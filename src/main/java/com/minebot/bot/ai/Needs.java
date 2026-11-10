@@ -257,7 +257,10 @@ public final class Needs {
         var home = bot.memory().home();
         return home != null && home.dimension() == bot.level().dimension() && bot.memory().autonomous()
             && bot.journey() == null && !GreatBuildTask.isAway(bot) && !GreatBuildTask.sessionOn(bot)
-            && !home.pos().closerThan(bot.blockPosition(), STRAYED);
+            && !home.pos().closerThan(bot.blockPosition(), STRAYED)
+            // (time to be setting off for it: on the road there when the server started again, it turned for home - Zealot,
+            // seven minutes back the way it came before "great build" sent it off again)
+            && !GreatBuildTask.wanted(bot);
     }
 
     private Needs() {
