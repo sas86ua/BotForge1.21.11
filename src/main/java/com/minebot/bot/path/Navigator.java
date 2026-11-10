@@ -66,6 +66,9 @@ public class Navigator {
     private int boatEnd;
     private double boatBest;
     private int boatStill;
+    /** When a boat last got stuck (game time); ways are planned without one for {@link #BOAT_REST} after. */
+    private long boatStuckAt = Long.MIN_VALUE / 2;
+    private static final long BOAT_REST = 20 * 120;
     /** When it may next try to get into a boat (ticks): every few seconds while swimming with one. */
     private int boatRetryAt;
     private boolean wasInWater;
@@ -366,7 +369,10 @@ public class Navigator {
         // Outside its zone (teleported away...) the bot must be able to walk back in
         // (on the way to the Great Build and back, it may go further than its zone)
         BlockPos zone = zoneCenter != null && insideZone(feet()) && !com.minebot.bot.ai.GreatBuildTask.isAway(bot) ? zoneCenter : null;
-        boolean boat = Inv.count(bot, stack -> stack.is(net.minecraft.tags.ItemTags.BOATS)) > 0
+        // (not for a while after one got stuck: the next way was by boat over the same water, and stuck again - Zola, in a
+        // flooded cave, fifty times in an hour)
+        long sinceStuck = bot.level().getGameTime() - boatStuckAt;
+        boolean boat = Inv.count(bot, stack -> stack.is(net.minecraft.tags.ItemTags.BOATS)) > 0 && (sinceStuck < 0 || sinceStuck > BOAT_REST)
             || bot.getVehicle() instanceof net.minecraft.world.entity.vehicle.boat.AbstractBoat; // (in one: plan for it too)
         PathFinder.Options options = new PathFinder.Options(true, canPlace, maxNodes, zone, zoneRadius, avoid, boat, escape,
             Inv.count(bot, stack -> stack.is(net.minecraft.world.item.Items.LADDER)), noLadder);
@@ -854,6 +860,7 @@ public class Navigator {
             boatStill = 0;
         } else if (++boatStill > 60) {
             bot.debug("the boat is stuck; getting out");
+            boatStuckAt = bot.level().getGameTime();
             leaveBoat();
             replan("boat stuck");
         }
