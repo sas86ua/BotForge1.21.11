@@ -49,7 +49,21 @@ public class VillageTidyTask extends Task {
 
     public static boolean wanted(BotPlayer bot) {
         return bot.memory().autonomous() && !Home.isNight(bot) && !GreatBuildTask.isAway(bot) && !GreatBuildTask.sessionOn(bot)
+            && !deepDown(bot)
             && next(bot) != null; // (looked at each time - cheap; kept a minute, it was started and done at once over and over)
+    }
+
+    /** Down a mine this far under the ground: the tidying waits till it's up again. */
+    private static final int MINE_DEPTH = 20;
+
+    /**
+     * (a stray block by the village's building called Deepslate up from its mine at -43, a hundred blocks off and a hundred
+     * up, searches giving out on the way - for one block of cobblestone, three hundred and ninety times over)
+     */
+    private static boolean deepDown(BotPlayer bot) {
+        net.minecraft.core.BlockPos feet = bot.blockPosition();
+        return feet.getY() < bot.level().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+            feet.getX(), feet.getZ()) - MINE_DEPTH;
     }
 
     @Override
