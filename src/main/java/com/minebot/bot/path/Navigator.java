@@ -38,6 +38,8 @@ public class Navigator {
     private static final int STEP_TIMEOUT = 80;
     private static final int MAX_FAILED_REPLANS = 6;
     private static final int MAX_STALLED_PARTIALS = 3;
+    /** A search this big that found not one step towards the goal is not done again from the same spot: no way. */
+    private static final int HOPELESS_NODES = 500;
     /** Ways walked to the end without the goal reached, before calling it done (or not). */
     private static final int MAX_FALSE_ARRIVALS = 3;
     /** A goal it found no way to is given up at once if asked for again within this long (ticks). */
@@ -316,6 +318,8 @@ public class Navigator {
             }
             bot.debug("path {} nodes, {} steps, complete={}, goal {}", search.expanded(), path == null ? 0 : path.size(),
                 path != null && path.complete(), goal);
+            int searched = search.expanded();
+            boolean afloat = bot.getVehicle() != null; // (out of the boat, the next search starts from other ground)
             search = null;
             index = 0;
             if (boat == null && bot.getVehicle() instanceof net.minecraft.world.entity.vehicle.boat.AbstractBoat riding) {
@@ -333,8 +337,15 @@ public class Navigator {
             }
             stepTicks = 0;
             if (path == null || path.size() <= 1) {
+                boolean hopeless = path != null && !path.complete() && searched >= HOPELESS_NODES && !afloat;
                 path = null;
-                onPathFailed();
+                if (hopeless) {
+                    // (searched again from the same spot it found the same nothing, seven times over before it gave up:
+                    // a sixth of all the searching the bots did, most of it at the Great Build, for jobs with no way to them)
+                    finish(Status.FAILED);
+                } else {
+                    onPathFailed();
+                }
                 return status;
             }
             status = Status.MOVING;
@@ -905,7 +916,7 @@ public class Navigator {
         // Never near lava or fire: a sprinting bot overshoots corners
         for (BlockPos near : BlockPos.betweenClosed(feet().offset(-3, -2, -3), feet().offset(3, 1, 3))) {
             BlockState state = bot.level().getBlockState(near);
-            if (BlockRules.isLava(state) || state.is(net.minecraft.tags.BlockTags.FIRE)) {
+            if (BlockRules.isHot(state)) {
                 return false;
             }
         }
