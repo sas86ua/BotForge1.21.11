@@ -487,7 +487,8 @@ public class Navigator {
             boatRetryAt = Math.min(boatRetryAt, bot.tickCount);
         }
         wasInWater = inWater;
-        if (bot.tickCount >= boatRetryAt && waterAhead(current, index + 1) >= BOAT_WATER) {
+        if (bot.tickCount >= boatRetryAt && bot.level().getGameTime() - boatStuckAt > BOAT_REST
+            && waterAhead(current, index + 1) >= BOAT_WATER) {
             boatRetryAt = bot.tickCount + 100; // (from the shore, or straight from the water if that didn't work)
             if (board(current)) {
                 return;
