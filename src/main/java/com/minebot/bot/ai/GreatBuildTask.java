@@ -61,6 +61,12 @@ public class GreatBuildTask extends Task {
      * (a tree top, a ledge) is left for later at once, not combed for over 30 000 blocks, again and again.
      */
     private static final int JOB_NODES = 6000;
+    /** Down in the basement, a job at ground level or over it and more than this far over its feet: out of the basement first. */
+    private static final int WAY_OUT_ABOVE = 5;
+    /** No way out found: not looked for again for this long (the jobs are tried from where it is meanwhile). */
+    private static final long WAY_OUT_RETRY = 20L * 60 * 2;
+    private boolean childIsWayOut;
+    private long nextWayOutAt;
     /** This job's block: walked to where it can be seen already (or there's nowhere): no second walk for that. */
     private boolean sightWalked;
     private static final int GO_TRIES = 8;
@@ -492,6 +498,12 @@ public class GreatBuildTask extends Task {
                     cantGet.add(restockItem);
                     build.failed(restockItem);
                 }
+            } else if (childIsWayOut) {
+                childIsWayOut = false;
+                if (status == Status.FAILURE) {
+                    bot.debug("great build: found no way out of the basement");
+                    nextWayOutAt = bot.level().getGameTime() + WAY_OUT_RETRY;
+                }
             } else if (status == Status.FAILURE && stage == Stage.GO) {
                 goTries++;
                 retryAt = bot.level().getGameTime() + 200; // (a moment before trying again: the same way just failed)
@@ -735,6 +747,9 @@ public class GreatBuildTask extends Task {
             if (job == null) {
                 job = build.nextJob(bot, true, digger);
             }
+            if (job != null && leaveBasementFor(build, job)) {
+                return Status.RUNNING;
+            }
             if (job == null) {
                 nextJobAt = bot.level().getGameTime() + 20 + bot.getRandom().nextInt(20);
             }
@@ -901,6 +916,26 @@ public class GreatBuildTask extends Task {
         return true;
     }
 
+    /**
+     * Down in the basement with the job up top: out of the basement first, by the nearest way there is from where it
+     * stands (the job is given out again once it is up). From under the job there is no way up to it - the floors of the
+     * building are in between - and the nearest it could get was the spot right under it: there it stood, one job after
+     * another over its head and a search for each (Calcite, Makena, Zealot and Redstone, the last eight minutes of a
+     * session: nine hundred searches, thirty-three blocks placed).
+     */
+    private boolean leaveBasementFor(GreatBuild build, GreatBuild.Job next) {
+        BlockPos pos = next.pos();
+        if (bot.level().getGameTime() < nextWayOutAt || pos.getY() < build.centre().getY()
+            || pos.getY() <= bot.getBlockY() + WAY_OUT_ABOVE || !build.inBasement(bot.blockPosition())) {
+            return false;
+        }
+        bot.debug("great build: {} at {} is up top; out of the basement first", next.type(), pos.toShortString());
+        job = null;
+        child = new GoToTask(bot, build.wayOut());
+        childIsWayOut = true;
+        return true;
+    }
+
     /** Ticks in the air on the way to a job (a hop, a fall), waited out before going on with it. */
     private int airTicks;
 
@@ -992,6 +1027,7 @@ public class GreatBuildTask extends Task {
                     sightWalked = true; // (nowhere to see it from: what's in the way, if it may go, is dug first)
                 } else {
                     // (no way found from close by: unreachable; from far off it may be only the search giving out)
+                    build.noWay(bot, current); // (nor are the cells round it tried from here, one search after another)
                     giveUp(build, bot.distanceToSqr(Vec3.atCenterOf(pos)) < 24 * 24);
                 }
             } else if (status == Navigator.Status.SUCCESS && dig) {
@@ -1153,6 +1189,7 @@ public class GreatBuildTask extends Task {
             child.stop();
             child = null;
         }
+        childIsWayOut = false;
         if (childIsRestock) {
             childIsRestock = false;
             bot.setMiningRule(null);

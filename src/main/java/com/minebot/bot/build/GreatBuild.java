@@ -241,6 +241,7 @@ public final class GreatBuild extends SavedData {
         cursor = 0;
         claims.clear();
         cooldowns.clear();
+        noWay.clear();
         chunksX = ((origin.getX() + schematic.width() - 1) >> 4) - (origin.getX() >> 4) + 1;
         chunksZ = ((origin.getZ() + schematic.length() - 1) >> 4) - (origin.getZ() >> 4) + 1;
         relevantInChunk = new int[2 * chunksX * chunksZ];
@@ -779,6 +780,31 @@ public final class GreatBuild extends SavedData {
         return entrances;
     }
 
+    /**
+     * Out of the basement by whatever way is nearest from where the bot is: its feet at ground level or over it. (Not
+     * to one of the ways in: those are the plan's - in the world as built so far, one was a hole in the ceiling four
+     * blocks up, another lay under where the bot stood with no way down to it.)
+     */
+    public com.minebot.bot.path.Goal wayOut() {
+        int ground = centre.getY();
+        return new com.minebot.bot.path.Goal() {
+            @Override
+            public boolean isReached(int x, int y, int z) {
+                return y >= ground;
+            }
+
+            @Override
+            public double distance(int x, int y, int z) {
+                return Math.max(0, ground - y);
+            }
+
+            @Override
+            public String toString() {
+                return "out of the basement";
+            }
+        };
+    }
+
     /** The way into the basement nearest this spot in it (null: none in the plan). */
     public @Nullable BlockPos entranceNear(BlockPos pos) {
         return entrances().stream().min(java.util.Comparator.comparingDouble(e -> e.distSqr(pos))).orElse(null);
@@ -1163,6 +1189,7 @@ public final class GreatBuild extends SavedData {
         Job best = null;
         double bestScore = Double.MAX_VALUE;
         int firstStep = -1;
+        List<NoWay> noWayHere = noWayFrom(bot, time);
         for (int step = 0; step < schematic.height(); step++) {
             if (bottomUp && step < lowest) {
                 continue;
@@ -1189,6 +1216,9 @@ public final class GreatBuild extends SavedData {
                     BlockPos pos = worldPos(index);
                     if (type == JobType.DIG && isClimbBlock(pos, time)) {
                         continue; // (a bot's way up or across: left)
+                    }
+                    if (!noWayHere.isEmpty() && noWayTo(noWayHere, pos) && !bot.isWithinBlockInteractionRange(pos, 0.5)) {
+                        continue; // (by one it found no way to a moment ago, from where it still stands)
                     }
                     if (reachOnly && bottomUp && (pos.getY() > bot.getBlockY() + REACH_UP || pos.getY() < bot.getBlockY() - REACH_DOWN)) {
                         continue;
@@ -1387,6 +1417,63 @@ public final class GreatBuild extends SavedData {
     }
 
     private final Map<Integer, UUID> claimedBy = new HashMap<>();
+
+    /** A job a bot found no way to: from where it stood, where the job was, and till when (game time) that counts. */
+    private record NoWay(BlockPos from, BlockPos to, long until) {
+    }
+
+    private final Map<UUID, List<NoWay>> noWay = new HashMap<>();
+    private static final long NO_WAY_TICKS = 20L * 60 * 2;
+    /** Still this near where it stood then: further off, the cells are offered to it again. */
+    private static final int NO_WAY_STAYED = 8;
+    /** Cells this near the one it found no way to (across, and up or down) are not offered to it either. */
+    private static final int NO_WAY_AROUND = 4;
+
+    /**
+     * No way for this bot from where it stands to this job: the cells round it are left out for it while it stays about
+     * there, and those further the same way up (or down). At the foot of a wall with no way up it, it was given the cell
+     * beside the one it had just failed to get to, then the one under that: a search each, six a minute for every bot,
+     * half of all the searching of a session - and a few dozen blocks placed.
+     */
+    public void noWay(BotPlayer bot, Job job) {
+        long now = bot.level().getGameTime();
+        List<NoWay> known = noWay.computeIfAbsent(bot.getUUID(), id -> new ArrayList<>());
+        known.removeIf(entry -> entry.until() <= now);
+        if (known.size() >= 8) {
+            known.remove(0);
+        }
+        known.add(new NoWay(bot.blockPosition(), job.pos(), now + NO_WAY_TICKS));
+    }
+
+    /** What this bot found no way to and still stands by (see noWay). */
+    private List<NoWay> noWayFrom(BotPlayer bot, long time) {
+        List<NoWay> known = noWay.get(bot.getUUID());
+        if (known == null || known.isEmpty()) {
+            return List.of();
+        }
+        List<NoWay> here = new ArrayList<>();
+        for (NoWay entry : known) {
+            if (entry.until() > time && entry.from().closerThan(bot.blockPosition(), NO_WAY_STAYED)) {
+                here.add(entry);
+            }
+        }
+        return here;
+    }
+
+    private static boolean noWayTo(List<NoWay> known, BlockPos pos) {
+        for (NoWay entry : known) {
+            BlockPos to = entry.to();
+            if (Math.abs(pos.getX() - to.getX()) > NO_WAY_AROUND || Math.abs(pos.getZ() - to.getZ()) > NO_WAY_AROUND) {
+                continue;
+            }
+            int up = to.getY() - entry.from().getY();
+            boolean beyond = up > 1 ? pos.getY() > to.getY() : up < -1 && pos.getY() < to.getY();
+            if (beyond || Math.abs(pos.getY() - to.getY()) <= NO_WAY_AROUND) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     public void claim(BotPlayer bot, Job job) {
         long until = bot.level().getGameTime() + CLAIM_TICKS;
