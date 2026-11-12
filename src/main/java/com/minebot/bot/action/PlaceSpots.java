@@ -38,7 +38,7 @@ public final class PlaceSpots {
         // Else anywhere it can attach to (a wall, the ceiling of a tunnel)
         Optional<BlockPos> attached = candidates(bot, feet)
             .filter(pos -> !new AABB(pos).intersects(body) && level.getFluidState(pos).isEmpty()
-                && BlockPlacer.canPlaceAt(level, pos))
+                && BlockPlacer.canPlaceAt(level, pos) && !onBuilding(level, pos))
             .min(Comparator.comparingDouble(pos -> pos.distToCenterSqr(bot.position())));
         if (attached.isPresent()) {
             return new Spot(attached.get(), false);
@@ -70,7 +70,19 @@ public final class PlaceSpots {
             // (not on a piece of furniture: a table on the bed, a furnace on a chest)
             && !below.is(net.minecraft.tags.BlockTags.BEDS) && !below.hasBlockEntity()
             && !below.is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE)
-            && !besideBed(level, pos); // (nor right beside a bed: a furnace at its foot, a block by its side)
+            && !besideBed(level, pos) // (nor right beside a bed: a furnace at its foot, a block by its side)
+            && !onBuilding(level, pos);
+    }
+
+    /**
+     * On a roof, a balcony, the top of a wall: built blocks under it and the open sky over it. Nothing is put down there
+     * (the home camp fire was - "open ground by the house" was the roof of the house). Not so at the Great Build, where
+     * the bots work and camp on what they build; nor on cobblestone, which is their own steps and bridges.
+     */
+    public static boolean onBuilding(ServerLevel level, BlockPos pos) {
+        net.minecraft.world.level.block.state.BlockState below = level.getBlockState(pos.below());
+        return BlockRules.isBuilt(below) && !below.is(net.minecraft.world.level.block.Blocks.COBBLESTONE)
+            && level.canSeeSky(pos) && !com.minebot.bot.build.GreatBuild.nearSite(pos);
     }
 
     private static boolean besideBed(ServerLevel level, BlockPos pos) {

@@ -176,12 +176,25 @@ public final class Home {
                         at.set(x, y, z);
                         net.minecraft.world.level.block.state.BlockState state = level.getBlockState(at);
                         boolean ladder = state.is(net.minecraft.world.level.block.Blocks.LADDER);
+                        if (state.getBlock() instanceof net.minecraft.world.level.block.CampfireBlock && area == areas.get(0)
+                            && plan.inFootprint(at) // (on this building, not a neighbour's: one there may be its plan's own)
+                            && com.minebot.bot.action.PlaceSpots.onBuilding(level, at) && !planned.contains(at)
+                            && !bot.pillars().contains(at) && !isClutter(bot, at)) {
+                            // A camp fire on the roof or a balcony (its own "by the house" one, or one it cooked on up there): down
+                            // it comes; the home one is put up again on the ground (see FurnishTask)
+                            BlockPos fire = at.immutable();
+                            bot.debug("a camp fire at {} on the house; taking it down", fire.toShortString());
+                            bot.notePillar(fire);
+                            CLUTTER.computeIfAbsent(bot.getUUID(), u -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(fire);
+                            found++;
+                            continue;
+                        }
                         if (!ladder && !state.is(net.minecraft.tags.BlockTags.LOGS)
                             && !com.minebot.bot.action.Inv.isScaffold(new net.minecraft.world.item.ItemStack(state.getBlock().asItem()))) {
                             continue;
                         }
                         BlockPos pos = at.immutable();
-                        if (planned.contains(pos) || bot.pillars().contains(pos) || isClutter(bot, pos) || stray(level, pos, ladder, plan, floor, area == areas.get(0)) == false) {
+                        if (planned.contains(pos) || bot.pillars().contains(pos) || isClutter(bot, pos) || stray(level, pos, ladder, plan, floor, area == areas.get(0), planned) == false) {
                             continue;
                         }
                         bot.debug("a stray {} at {} by the house; taking it down", state.getBlock().getName().getString(), pos.toShortString());
@@ -195,7 +208,8 @@ public final class Home {
     }
 
     /** @param byHouse round the house itself (not the old hut, which may be of cobblestone) */
-    private static boolean stray(ServerLevel level, BlockPos pos, boolean ladder, com.minebot.bot.build.HousePlan plan, int floor, boolean byHouse) {
+    private static boolean stray(ServerLevel level, BlockPos pos, boolean ladder, com.minebot.bot.build.HousePlan plan, int floor, boolean byHouse,
+                                 java.util.Set<BlockPos> planned) {
         net.minecraft.world.level.block.state.BlockState self = level.getBlockState(pos);
         // (not "natural terrain only": cobblestone isn't, and none of it was ever taken)
         if (com.minebot.bot.build.GreatBuild.nearSite(pos) || com.minebot.bot.world.ProtectedAreas.isProtected(level, pos)
@@ -211,9 +225,13 @@ public final class Home {
         for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.values()) {
             BlockPos side = pos.relative(direction);
             net.minecraft.world.level.block.state.BlockState state = level.getBlockState(side);
-            if (state.is(net.minecraft.world.level.block.Blocks.FARMLAND) || !state.getFluidState().isEmpty()
-                || state.is(net.minecraft.tags.BlockTags.FENCES) || state.is(net.minecraft.tags.BlockTags.FENCE_GATES)
-                || state.is(net.minecraft.tags.BlockTags.WALLS)) {
+            if (state.is(net.minecraft.world.level.block.Blocks.FARMLAND) || !state.getFluidState().isEmpty()) {
+                return false;
+            }
+            // (a fence of the house itself - a balcony's railing - is no pen or field: the cobblestone put up round the
+            // way off a balcony stood there for good, "by a fence")
+            if ((state.is(net.minecraft.tags.BlockTags.FENCES) || state.is(net.minecraft.tags.BlockTags.FENCE_GATES)
+                || state.is(net.minecraft.tags.BlockTags.WALLS)) && !planned.contains(side)) {
                 return false;
             }
             if (direction.getAxis().isHorizontal() && (state.canBeReplaced() || state.getCollisionShape(level, side).isEmpty())) {
