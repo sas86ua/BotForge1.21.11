@@ -79,6 +79,14 @@ public class SheepPenTask extends Task {
     private static final int TICKS_PER_BLOCK = 20 * 15;
     private static final int LURE_TICKS = 20 * 120;
     private static final long DAY = 24000L;
+    /** A pit in the pen is filled in this deep. */
+    private static final int PIT_DEPTH = 4;
+    /** The trunk of a tree grown in the pen is cut this far up. */
+    private static final int TREE_HEIGHT = 7;
+    /** No sapling is planted this close to a pen (its crown would be over the fence), by anyone. */
+    public static final int NO_TREES = 4;
+    /** No block is dug this close to a pen for what it gives (the trees aside): the pits were the sheep's way under the fence. */
+    public static final int NO_DIGGING = 2;
 
     /** When each bot next looks after its pen (after a round, whether it got done or not). */
     private static final Map<UUID, Long> NEXT = new ConcurrentHashMap<>();
@@ -177,6 +185,26 @@ public class SheepPenTask extends Task {
             if (Inv.isScaffold(new ItemStack(level.getBlockState(cell).getBlock().asItem()))
                 || Inv.isScaffold(new ItemStack(level.getBlockState(cell.above()).getBlock().asItem()))) {
                 return false; // (a block left inside: a step up to the fence)
+            }
+        }
+        // A tree grown in it (or a sapling coming up), a pit in its ground or under its fence: mended like a gap in the fence
+        // (an oak stood in a corner of one, its crown over the fence, and a pit two blocks deep beside it)
+        for (BlockPos cell : inside(pen)) {
+            for (BlockPos at : new BlockPos[] {cell, cell.above()}) {
+                BlockState state = level.getBlockState(at);
+                if (state.is(BlockTags.LOGS) || state.is(BlockTags.SAPLINGS)) {
+                    return false;
+                }
+            }
+        }
+        for (BlockPos cell : inside(pen)) {
+            if (level.getBlockState(cell.below()).canBeReplaced()) {
+                return false;
+            }
+        }
+        for (BlockPos cell : ring(pen)) {
+            if (level.getBlockState(cell.below()).canBeReplaced()) {
+                return false;
             }
         }
         // The step in front of the gate gone (dug, a pit under it): the way to the gate is the air above a drop, and every
@@ -511,7 +539,12 @@ public class SheepPenTask extends Task {
             if (skipped.contains(cell)) {
                 continue;
             }
+            // (a pit is filled in from its bottom up)
             BlockPos below = cell.below();
+            for (int depth = 2; depth <= PIT_DEPTH && level.getBlockState(below).canBeReplaced()
+                && level.getBlockState(cell.below(depth)).canBeReplaced(); depth++) {
+                below = cell.below(depth);
+            }
             if (level.getBlockState(below).canBeReplaced() && !skipped.contains(below)) {
                 if (Inv.count(bot, stack -> stack.is(Items.DIRT)) == 0) {
                     child = new ObtainTask(bot, Target.of(Items.DIRT, 8), 0);
@@ -522,8 +555,13 @@ public class SheepPenTask extends Task {
                 }
                 return Status.RUNNING;
             }
-            for (BlockPos clear : new BlockPos[] {cell, cell.above()}) {
+            for (int up = 0; up <= TREE_HEIGHT; up++) {
+                BlockPos clear = cell.above(up);
                 BlockState state = level.getBlockState(clear);
+                boolean log = state.is(BlockTags.LOGS);
+                if (up > 1 && !log) {
+                    continue; // (higher up, only the trunk of a tree that grew in it: felled whole, as far as it reaches)
+                }
                 if (state.canBeReplaced() || state.is(BlockTags.FENCES) || state.is(BlockTags.FENCE_GATES) || skipped.contains(clear)) {
                     continue;
                 }
@@ -531,7 +569,7 @@ public class SheepPenTask extends Task {
                 // sheep climbed it and out over the fence)
                 // (and a flower or a sapling growing where the fence goes: it was left out, and the pen stood with gaps in it - Calcite's)
                 boolean stray = (Inv.isScaffold(new ItemStack(state.getBlock().asItem())) || state.is(BlockTags.FLOWERS)
-                    || state.is(BlockTags.SAPLINGS))
+                    || state.is(BlockTags.SAPLINGS) || log)
                     && !ProtectedAreas.isProtected(level, clear);
                 if (!stray && (!BlockRules.canBreak(level, clear, state) || BlockRules.isBuilt(state))) {
                     skipped.add(clear);
@@ -581,6 +619,11 @@ public class SheepPenTask extends Task {
         // Done: out of it, the gate shut
         if (!leave()) {
             return Status.RUNNING;
+        }
+        if (!skipped.isEmpty()) {
+            // (what it couldn't mend is still wrong the next time it looks: not straight away again, round and round)
+            bot.debug("sheep pen: built at {}, but for {} blocks it couldn't see to", pen.toShortString(), skipped.size());
+            return finish(Status.SUCCESS, DAY / 4);
         }
         bot.debug("sheep pen: built at {}", pen.toShortString());
         return finish(Status.SUCCESS, 20 * 10);

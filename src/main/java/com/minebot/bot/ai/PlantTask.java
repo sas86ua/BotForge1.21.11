@@ -163,6 +163,9 @@ public class PlantTask extends Task {
         if (!bot.memory().inZone(level.dimension(), pos) || ProtectedAreas.isProtected(level, pos)) {
             return false;
         }
+        if (SheepPenTask.nearPen(level, pos, SheepPenTask.NO_TREES)) {
+            return false; // (not in a sheep pen nor by it: an oak grew up in the corner of one)
+        }
         var home = bot.memory().home();
         if (home != null && home.dimension() == level.dimension() && home.pos().closerThan(pos, HOME_DISTANCE)) {
             return false; // not in front of the door

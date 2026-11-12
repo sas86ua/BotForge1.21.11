@@ -569,6 +569,9 @@ public class PathFinder {
         if (state.isAir() || !BlockRules.isNaturalTerrain(state) || state.hasBlockEntity()) {
             return false;
         }
+        if (!options.escape() && com.minebot.bot.ai.SheepPenTask.nearPen(level, cursor.set(x, y, z), 1)) {
+            return false; // (no way dug in a sheep pen or under its fence: stairs down to a mine were started from inside one)
+        }
         for (BlockPos home : noDigging) {
             long dx = home.getX() - x;
             long dz = home.getZ() - z;

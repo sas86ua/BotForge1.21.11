@@ -380,6 +380,7 @@ public class GatherTask extends Task {
             && bot.memory().inZone(level.dimension(), pos)
             && !ProtectedAreas.isProtected(level, pos)
             && !nearBuilding(pos, buildings)
+            && (logs || !SheepPenTask.nearPen(level, pos, SheepPenTask.NO_DIGGING)) // (no pits in a sheep pen; a tree in one may go)
             && !nearWater(level, pos)
             && (!logs || BlockRules.isNaturalTreeLog(level, pos, state) && (scaffold || withinReachOfGround(level, pos)));
         // What the last look found and is still there to dig, while it is still about where it looked from: the next of
